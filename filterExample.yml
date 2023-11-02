@@ -1,0 +1,27 @@
+outDelimiter: ';'
+filterThreads: 1
+sampleLines: 10
+filters:
+  - name: 'Python filter'
+    actionType: 'python'
+    actionConfig: 
+      code: |
+        addAge = 10
+        sum = row.get("age", 0) + addAge
+        row["newAge"] = sum
+        
+  - name: 'Rest Filter'
+    actionType: 'rest'
+    disabled: True
+    actionConfig:
+      logHttpRequests: true
+      method: GET
+      host: "http://"
+      path: "method"
+      queryParamNames: "a,b,c"
+      queryParamValues: "{a},{b},c"
+      urlencodeParams: false
+      fieldsToLoad: ""
+      newFieldNames: ""
+
+  

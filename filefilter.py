@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import duckdb
 import yaml
 import sys
@@ -76,83 +75,11 @@ def main(input_file, config_file, output_file):
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         log.info("Uso: filefilter <fichero de entrada> <configuracion.yml> <fichero de salida>")
-=======
-import types
-
-codeInString = '''
-a = 8
-b=7
-sum=a+b
-print("sum =",sum)
-'''
-codeObject = compile(codeInString, 'sumstring', 'exec')
-
-exec(codeObject)
-''''''''''''''
-
-import duckdb
-import yaml
-import sys
-import csv
-
-global config
-config = None
-
-def main(input_file, config_file, output_file):
-    # Leer el archivo CSV con DuckDB
-    read_csv_with_duckdb(input_file)
-    
-    # Leer configuracion.yml y aplicar transformaciones
-    transformed_data = apply_transformations(config_file)
-    
-    # Escribir el archivo de salida
-    write_output(transformed_data, output_file)
-
-def read_csv_with_duckdb(input_file):
-    print("Reading CSV file " + input_file + "...")
-    duckdb.query("CREATE TABLE df AS (SELECT * FROM read_csv_auto('" + input_file + "', HEADER=TRUE, SAMPLE_SIZE=1000000))")
-
-    # print first 5 rows of the df
-    print(duckdb.query("SELECT * FROM df LIMIT 5"))
-
-
-def apply_transformations(config_file):
-    global config
-    if config is None:
-        with open(config_file, 'r') as f:
-            print("Loading config file " + config_file + "...")
-            config = yaml.safe_load(f)
-            # Print Yaml pretty
-            print(yaml.dump(config, default_flow_style=False, sort_keys=False))
-
-
-
-
-
-    
-    # Aplicar transformaciones
-
-    
-    
-    return ""
-
-
-def write_output(data, output_file):
-    '''with open(output_file, 'w', newline='') as f:
-        writer = csv.writer(f, delimiter=';')  # Asumimos ; como delimitador, pero esto se puede modificar
-        writer.writerow(data.columns)  # Escribir encabezado
-        for row in data.iterate():
-            writer.writerow(list(row))
-'''
-
-if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Uso: filefilter <fichero de entrada> <configuracion.yml> <fichero de salida>")
->>>>>>> ae8a490 (First commit)
         sys.exit(1)
     
     input_file = sys.argv[1]
     config_file = sys.argv[2]
     output_file = sys.argv[3]
+    
     
     main(input_file, config_file, output_file)

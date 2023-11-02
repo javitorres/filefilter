@@ -1,0 +1,27 @@
+outDelimiter: ';'
+filterThreads: 1
+sampleLines: 10
+filters:
+  - name: 'Rest Filter'
+    actionType: 'rest'
+    disabled: False
+    actionConfig:
+      logHttpRequests: true
+      method: GET
+      host: "https://restcountries.com"
+      path: "v3.1/name/spain"
+      queryParamNames: ""
+      queryParamValues: ""
+      urlencodeParams: false
+      fieldsToLoad: ""
+      newFieldNames: ""
+
+  - name: 'Python filter'
+    actionType: 'python'
+    actionConfig: 
+      code: |
+        addAge = 10
+        sum = row.get("age", 0) + addAge
+        row["newAge"] = sum
+
+  

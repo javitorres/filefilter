@@ -6,10 +6,11 @@ filters:
     actionType: 'rest'
     disabled: False
     actionConfig:
-      logHttpRequests: true
+      logHttpRequests: True
+      logHttpResponses: False
       method: GET
       host: "https://restcountries.com"
-      path: "v3.1/name/spain"
+      path: "v3.1/name/{countryName}"
       queryParamNames: ""
       queryParamValues: ""
       urlencodeParams: false
@@ -20,8 +21,11 @@ filters:
     actionType: 'python'
     actionConfig: 
       code: |
-        addAge = 10
-        sum = row.get("age", 0) + addAge
-        row["newAge"] = sum
+        #capital = row['response'][0]['capital'][0]
+        region = row['response']['region']
+        #population = row['response'][0]['population']
+        #row["capital"] = capital
+        row["region"] = region
+        #row["population"] = population
 
   

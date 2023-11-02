@@ -7,8 +7,7 @@ log = Logger("DEBUG")
 def restFilter(row, actionConfig):
     host = actionConfig['host']
     path = actionConfig['path']
-    url = f"{host}/{path}"
-
+    
     params = {}
     param_names = actionConfig['queryParamNames'].split(',')
     param_values = actionConfig['queryParamValues'].split(',')
@@ -20,16 +19,25 @@ def restFilter(row, actionConfig):
             params[name] = value
 
     method = actionConfig.get('method', 'GET')
+    # Replace in method every {value} appearance with the value of the row with the same name
+    path = path.format(**row)
 
+    url = f"{host}/{path}"
     if actionConfig['urlencodeParams']:
         response = requests.request(method, url, params=params)
     else:
         url += '?' + '&'.join([f"{k}={v}" for k, v in params.items()])
-        log.debug(f"\t\tHttp request: {url}")
+        if actionConfig.get('logHttpRequests', False):
+            log.debug(f"\t\tHttp request: {url}")
         response = requests.request(method, url)
 
     if response.status_code == 200:
-        log.debug(response.json())
+        if actionConfig.get('logHttpResponses', False):
+            log.debug("\t\tResponse:" + str(response.json()))
+        # Add full json as new columns to the row
+        row_dict = row.to_dict()
+        row_dict['response'] = response.json()
+        return row_dict
     else:
         log.debug(f"\t\tError al hacer la petición REST: {response.status_code}")
 

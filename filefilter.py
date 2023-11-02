@@ -27,6 +27,9 @@ def apply_transformations(config, df):
             break
         
         for filter_ in config.get('filters', []):
+            # reload row from df
+            row = df.iloc[index]
+            log.debug("Row:\n" + str(row))
             if filter_.get('disabled', False):
                 log.debug(f"\tFilter {filter_.get('name', 'unnamed')} is disabled, skipping...")
                 break
@@ -40,7 +43,12 @@ def apply_transformations(config, df):
                     df.at[index, col] = value
 
             elif filter_.get('actionType') == 'rest':
-                restFilter(row, filter_.get('actionConfig'))
+                modified_row_dict = restFilter(row, filter_.get('actionConfig'))
+                log.debug(f"\t\tModified row: {modified_row_dict}")
+                # Aplicar los cambios al DataFrame
+                for col, value in modified_row_dict.items():
+                    log.debug(f"\t\tSetting {col} to {value}")
+                    df.at[index, col] = value
             else:
                 log.debug(f"Tipo de acción desconocido: {filter_.get('actionType')}")
     return df

@@ -1,13 +1,10 @@
-
 import requests
-
 from Logger import Logger
 log = Logger("DEBUG")
 
 def restFilter(row, actionConfig):
     host = actionConfig['host']
     path = actionConfig['path']
-    
     params = {}
     param_names = actionConfig['queryParamNames'].split(',')
     param_values = actionConfig['queryParamValues'].split(',')

@@ -1,5 +1,9 @@
 <H1>FileFilter</H1>
 
+<div align="center">
+<img src="https://github.com/javitorres/filefilter/assets/4235424/6ad70c65-e35f-4ecf-a25d-37a2591e5d75" height="300">
+</div>
+
 <p align="center">
     <img src="https://img.shields.io/badge/Version-0.1.0-red" alt="Latest Release">
     <img src="https://img.shields.io/badge/DuckDB-0.9.1-yellow" alt="DuckDB">

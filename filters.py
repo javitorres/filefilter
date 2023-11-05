@@ -1,5 +1,8 @@
 import requests
 from Logger import Logger
+import duckdb
+import json
+
 log = Logger("DEBUG")
 
 def restFilter(row, actionConfig):
@@ -30,22 +33,24 @@ def restFilter(row, actionConfig):
 
     if response.status_code == 200:
         if actionConfig.get('logHttpResponses', False):
-            log.debug("\t\tResponse:" + str(response.json()))
+            log.debug("\t\tResponse:" + str(json.dumps(response.json())))
         # Add full json as new columns to the row
         row_dict = row.to_dict()
-        row_dict['response'] = response.json()
+        row_dict['response'] = json.dumps(response.json())
         return row_dict
     else:
         log.debug(f"\t\tError al hacer la petición REST: {response.status_code}")
 
 def pythonFilter(row, actionConfig):
-    #log.debug("Compilando: " + str(actionConfig['code']))
     codeObject = compile(str(actionConfig['code']), 'sumstring', 'exec')
-    
     try:
-        #log.debug("Running python code: \n{code}")
         row_dict = row.to_dict()
         res = exec(codeObject, {"row": row_dict})
         return row_dict
     except Exception as e:
         log.debug(f"\t\tError al ejecutar el código: {e}")
+
+def sqlFilter(df, actionConfig):
+    sql = actionConfig['sql']
+    newDf = duckdb.query(sql).to_df()
+    return newDf

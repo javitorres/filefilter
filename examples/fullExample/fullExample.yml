@@ -39,44 +39,38 @@ filters:
           longitud = random.uniform(lon_oeste, lon_este)
           return pd.Series({'latitud': latitud, 'longitud': longitud})
 
-        
         df[['lat', 'lon']] = df.apply(lambda x: genCoords(lat_n, lat_s, lon_w, lon_e), axis=1)
-
-
         print(df)
-
 
   - name: 'Inverse geocode'
     actionType: 'rest'
     disabled: False
     actionConfig:
-      logHttpRequests: False
+      logHttpRequests: True
       logHttpResponses: False
       method: GET
       host: "https://geocode.maps.co"
       path: "reverse?lat={lat}&lon={lon}"
-      queryParamNames: ""
-      queryParamValues: ""
-      urlencodeParams: false
-      fieldsToLoad: ""
-      newFieldNames: ""
-  - name: 'Extraer variables'
+
+  - name: 'Extract vars from JSON'
     actionType: 'python'
-    disabled: True
+    disabled: False
     actionConfig: 
+      # Multiline section for python code. Use row to access the current row
       code: |
         import json
         json_string = row.get("response", {})
         obj = json.loads(json_string)
-        row['precision']=obj.get('xxxx',{}).get('id')
-        
-  - name: 'Extraer mas variables'
+        row['display_name']=obj.get('display_name',{})
+        row['locality']=obj.get('address',{}).get('locality', '')
+        row['state']=obj.get('address',{}).get('state', '')
+
+  - name: 'Select final fields using SQL'
     actionType: 'sql'
     actionConfig:
       sql: |
         SELECT
-        df.*,
-        
+        df.lat, df.lon, concat(df.lat, ',', df.lon) as coords, concat(df.display_name, ' - ', df.locality, ' - ', df.state) as address
         FROM
         df;
         

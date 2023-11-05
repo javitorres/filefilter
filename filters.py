@@ -9,24 +9,30 @@ def restFilter(row, actionConfig):
     host = actionConfig['host']
     path = actionConfig['path']
     params = {}
-    param_names = actionConfig['queryParamNames'].split(',')
-    param_values = actionConfig['queryParamValues'].split(',')
-    for name, value in zip(param_names, param_values):
-        # if Value is surrounded by {} remove them, else use the value as is
-        if value.startswith('{') and value.endswith('}'):
-            params[name] = row[value[1:-1]]
-        else:
-            params[name] = value
+    param_names = actionConfig.get('queryParamNames', {})
+    param_values = actionConfig.get('queryParamValues',{})
+    if len(param_names) != len(param_values):
+        log.debug(f"\t\tError: queryParamNames and queryParamValues must have the same length")
+        return
+    elif len(param_names) >= 0:
+        for name, value in zip(param_names, param_values):
+            # if Value is surrounded by {} remove them, else use the value as is
+            if value.startswith('{') and value.endswith('}'):
+                params[name] = row[value[1:-1]]
+            else:
+                params[name] = value
 
     method = actionConfig.get('method', 'GET')
-    # Replace in method every {value} appearance with the value of the row with the same name
+    # Pathparams: Replace in method every {value} appearance with the value of the row with the same name
     path = path.format(**row)
 
     url = f"{host}/{path}"
-    if actionConfig['urlencodeParams']:
+    if actionConfig.get('urlencodeParams', False):
         response = requests.request(method, url, params=params)
     else:
-        url += '?' + '&'.join([f"{k}={v}" for k, v in params.items()])
+        if len(params) > 0:
+            log.debug(f"\t\tParams: {params}")
+            url += '?' + '&'.join([f"{k}={v}" for k, v in params.items()])
         if actionConfig.get('logHttpRequests', False):
             log.debug(f"\t\tHttp request: {url}")
         response = requests.request(method, url)

@@ -56,7 +56,7 @@ Run:
 python3 filefilter.py examples/fullExample/fullExample.txt examples/fullExample/fullExample.yml /tmp/fullExampleOutput.csv
 ```
 
-And you get an out similar to:
+And you'll get an output similar to:
 ```
 ,id,lat,lon,response,display_name,locality,state,lat_n,lat_s,lon_w,lon_e
 0,1,40.37622704647547,-3.641814011779527,"{""place_id"": 108862066, ""licence"": ""Data \u00a9 OpenStreetMap contributors, ODbL 1.0. https://osm.org/copyright"", ""powered_by"": ""Map Maker: https://maps.co"", ""osm_type"": ""way"", ""osm_id"": 27608142, ""lat"": ""40.376376648779114"", ""lon"": ""-3.6418518373185678"", ""display_name"": ""Calle de Luis I, Casco Hist\u00f3rico de Vallecas, Villa de Vallecas, Madrid, \u00c1rea metropolitana de Madrid y Corredor del Henares, Community of Madrid, 28001, Spain"", ""address"": {""road"": ""Calle de Luis I"", ""quarter"": ""Casco Hist\u00f3rico de Vallecas"", ""suburb"": ""Villa de Vallecas"", ""city"": ""Madrid"", ""county"": ""\u00c1rea metropolitana de Madrid y Corredor del Henares"", ""state"": ""Community of Madrid"", ""postcode"": ""28001"", ""country"": ""Spain"", ""country_code"": ""es""}, ""boundingbox"": [""40.3733161"", ""40.3769421"", ""-3.6503754"", ""-3.6395964""]}","Calle de Luis I, Casco Histórico de Vallecas, Villa de Vallecas, Madrid, Área metropolitana de Madrid y Corredor del Henares, Community of Madrid, 28001, Spain",,Community of Madrid,40.37522704647547,40.37722704647547,-3.6428140117795267,-3.640814011779527
@@ -67,5 +67,7 @@ And you get an out similar to:
 ```
 
 Showing with a CSV viewer like VisiData:
+
+![Captura desde 2023-11-05 17-49-57](https://github.com/javitorres/filefilter/assets/4235424/a5e311a3-614b-4bf0-bc47-3c39b821eed8)
 
 

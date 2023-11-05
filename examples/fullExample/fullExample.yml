@@ -46,9 +46,12 @@ filters:
     actionType: 'rest'
     disabled: False
     actionConfig:
+      # Log request and/or response
       logHttpRequests: True
       logHttpResponses: False
+      # Get or Post
       method: GET
+      # Host and path. Use {var} to access columns
       host: "https://geocode.maps.co"
       path: "reverse?lat={lat}&lon={lon}"
 
@@ -68,9 +71,10 @@ filters:
   - name: 'Select final fields using SQL'
     actionType: 'sql'
     actionConfig:
+      # Multiline section for SQL code. Use df to access the current dataframe
       sql: |
+        --- Add a new bounding box field
         SELECT
-        df.lat, df.lon, concat(df.lat, ',', df.lon) as coords, concat(df.display_name, ' - ', df.locality, ' - ', df.state) as address
+          df.*, df.lat - 0.001 AS lat_n, df.lat + 0.001 AS lat_s, df.lon - 0.001 AS lon_w, df.lon + 0.001 AS lon_e
         FROM
-        df;
-        
+          df;

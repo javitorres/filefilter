@@ -1,0 +1,82 @@
+# Indicate the output delimiter, use "TAB" or tab por tabs
+outDelimiter: ','
+
+# How many threads to process the file.
+filterThreads: 1
+
+# How many lines to be processed, 0 for all the lines. Useful to keep low during development
+sampleLines: 10
+
+# When to reload the configuration. Useful to adjust threads number at runtime
+reloadConfigEvery: 10
+
+# Filters section
+filters:
+    # Filter name and/or description
+  - name: 'Add locations'
+
+    # Filter type pandas. Possible filters are: over full df: pandas, sql. Over each line: python or rest
+    actionType: 'pandas'
+
+    # If True this filter will not be used
+    disabled: False
+
+    # Specific properties of this filter
+    actionConfig: 
+      # Multiline section for python code
+      code: |
+        import pandas as pd
+        import random
+
+        # Coords limits
+        lat_n = 40.643
+        lat_s = 40.340
+        lon_w = -3.888
+        lon_e = -3.517
+
+        def genCoords(lat_norte, lat_sur, lon_oeste, lon_este):
+          latitud = random.uniform(lat_sur, lat_norte)
+          longitud = random.uniform(lon_oeste, lon_este)
+          return pd.Series({'latitud': latitud, 'longitud': longitud})
+
+        
+        df[['lat', 'lon']] = df.apply(lambda x: genCoords(lat_n, lat_s, lon_w, lon_e), axis=1)
+
+
+        print(df)
+
+
+  - name: 'Inverse geocode'
+    actionType: 'rest'
+    disabled: False
+    actionConfig:
+      logHttpRequests: False
+      logHttpResponses: False
+      method: GET
+      host: "https://geocode.maps.co"
+      path: "reverse?lat={lat}&lon={lon}"
+      queryParamNames: ""
+      queryParamValues: ""
+      urlencodeParams: false
+      fieldsToLoad: ""
+      newFieldNames: ""
+  - name: 'Extraer variables'
+    actionType: 'python'
+    disabled: True
+    actionConfig: 
+      code: |
+        import json
+        json_string = row.get("response", {})
+        obj = json.loads(json_string)
+        row['precision']=obj.get('xxxx',{}).get('id')
+        
+  - name: 'Extraer mas variables'
+    actionType: 'sql'
+    actionConfig:
+      sql: |
+        SELECT
+        df.*,
+        
+        FROM
+        df;
+        

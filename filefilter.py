@@ -58,10 +58,15 @@ def apply_transformations(config_file, df):
                 else:
                     log.debug(f"Action type unknown: {filter_.get('actionType')}")
         # This kind of filters act over the whole df pandas dataframe:
-        elif filter_.get('actionType') == 'sql':
-            log.debug("Processing df with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
-            newDf = sqlFilter(df, filter_.get('actionConfig'))
-            df = newDf
+        elif filter_.get('actionType') == 'sql' or filter_.get('actionType') == 'pandas':
+            if filter_.get('actionType') == 'sql':
+                log.debug("Processing df with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
+                newDf = sqlFilter(df, filter_.get('actionConfig'))
+                df = newDf
+            elif filter_.get('actionType') == 'pandas':
+                log.debug("Processing df with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
+                newDf = pandasFilter(df, filter_.get('actionConfig'))
+                df = newDf
     return df
 
 def short(value, length):

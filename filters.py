@@ -39,7 +39,7 @@ def restFilter(row, actionConfig):
         row_dict['response'] = json.dumps(response.json())
         return row_dict
     else:
-        log.debug(f"\t\tError al hacer la petición REST: {response.status_code}")
+        log.debug(f"\t\tError al hacer la petición REST: {response.status_code} URL: {url}")
 
 def pythonFilter(row, actionConfig):
     codeObject = compile(str(actionConfig['code']), 'sumstring', 'exec')
@@ -54,3 +54,11 @@ def sqlFilter(df, actionConfig):
     sql = actionConfig['sql']
     newDf = duckdb.query(sql).to_df()
     return newDf
+
+def pandasFilter(df, actionConfig):
+    codeObject = compile(str(actionConfig['code']), 'sumstring', 'exec')
+    try:
+        res = exec(codeObject, {"df": df})
+        return df
+    except Exception as e:
+        log.debug(f"\t\tError al ejecutar el código: {e}")

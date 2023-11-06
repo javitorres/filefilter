@@ -5,7 +5,7 @@ outDelimiter: ','
 filterThreads: 1
 
 # How many lines to be processed, 0 for all the lines. Useful to keep low during development
-sampleLines: 10
+sampleLines: 2
 
 # When to reload the configuration. Useful to adjust threads number at runtime
 reloadConfigEvery: 10
@@ -55,7 +55,7 @@ filters:
       host: "https://geocode.maps.co"
       path: "reverse?lat={lat}&lon={lon}"
 
-  - name: 'Extract vars from JSON'
+  - name: 'Extract some vars from JSON'
     actionType: 'python'
     disabled: False
     actionConfig: 
@@ -65,16 +65,35 @@ filters:
         json_string = row.get("response", {})
         obj = json.loads(json_string)
         row['display_name']=obj.get('display_name',{})
-        row['locality']=obj.get('address',{}).get('locality', '')
         row['state']=obj.get('address',{}).get('state', '')
 
-  - name: 'Select final fields using SQL'
+  - name: 'Extract all vars from JSON'
+    actionType: 'python'
+    disabled: False
+    actionConfig: 
+      # Multiline section for python code. Use row to access the current row
+      code: |
+        import json
+        import pandas as pd
+        json_string = row.get("response", {})
+        jsonO = json.loads(json_string)
+        df = pd.json_normalize(jsonO)
+        print("DF:" + str(df))
+
+        # For each column in the dataframe
+        for col in df.columns:
+          # Add a new column with the name of the column and the value
+          row[col] = df[col][0]
+
+
+  - name: 'Select final fields using DuckDB SQL'
     actionType: 'sql'
+    disabled: False
     actionConfig:
       # Multiline section for SQL code. Use df to access the current dataframe
       sql: |
-        --- Add a new bounding box field
+        --- Exclude the original lat and lon and the response
         SELECT
-          df.*, df.lat - 0.001 AS lat_n, df.lat + 0.001 AS lat_s, df.lon - 0.001 AS lon_w, df.lon + 0.001 AS lon_e
+          * EXCLUDE(lat, lon, response)
         FROM
           df;

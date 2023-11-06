@@ -43,7 +43,7 @@ def apply_transformations(config_file, df):
                         try:
                             df.at[index, col] = value
                         except Exception as e:
-                            log.debug(f"\t\tError appliying change: {e}")
+                            log.debug(f"\t\tError applying change: {e}")
                 elif filter_.get('actionType') == 'rest':
                     log.debug("Processing row " + str(index) + " with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
                     modified_row_dict = restFilter(row, filter_.get('actionConfig'))

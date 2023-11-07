@@ -5,10 +5,18 @@ from filters import *
 from Logger import Logger
 log = Logger("DEBUG")
 
-def read_csv_with_duckdb(input_file):
-    log.info("Reading CSV file into dataframe 'df' " + input_file + ": Running: SELECT * FROM read_csv_auto('" + input_file + "', HEADER=TRUE, SAMPLE_SIZE=1000000)")
-    df=duckdb.query("SELECT * FROM read_csv_auto('" + input_file + "', HEADER=TRUE, SAMPLE_SIZE=1000000)").to_df()
-    log.debug(df.head(5))
+def read_csv_with_duckdb(config_file, input_file):
+    config = load_config(config_file, False)
+    if config.get('inDelimiter', None) is None:
+        sqlCommand = "SELECT * FROM read_csv_auto('" + input_file + "', HEADER=TRUE, SAMPLE_SIZE=1000000)"
+    elif config['inDelimiter'] == 'TAB' or config['inDelimiter'] == 'tab' or config['inDelimiter'] == '\t':
+        sqlCommand = "SELECT * FROM read_csv_auto('" + input_file + "', HEADER=TRUE, SAMPLE_SIZE=1000000, DELIM='\t')"
+    else:
+        sqlCommand = "SELECT * FROM read_csv_auto('" + input_file + "', HEADER=TRUE, SAMPLE_SIZE=1000000, DELIM='"+ config['inDelimiter'] +"')"
+    
+    log.info("Reading CSV file into dataframe 'df' " + input_file + ": Running: " + sqlCommand)
+    df=duckdb.query(sqlCommand).to_df()
+    log.debug("df content:\n" + str(df.head(5)))
     return df
 
 def apply_transformations(config_file, df):
@@ -19,9 +27,8 @@ def apply_transformations(config_file, df):
     # Loop over each filter in config:
     for filter_ in config.get('filters', []):
         if filter_.get('disabled', False):
-            log.debug(f"\tFilter {filter_.get('name', 'unnamed')} is disabled, skipping...")
-            break
-        
+            log.debug(f"\tFilter '{filter_.get('name', 'unnamed')}' is disabled, skipping...")
+            continue
         # This kind of filters loops over each record of df pandas dataframe:
         if filter_.get('actionType') == 'python' or filter_.get('actionType') == 'rest':
             for index, row in df.iterrows():
@@ -92,7 +99,7 @@ def load_config(config_file, logConfig):
 
 def main(input_file, config_file, output_file):
     # Leer el archivo CSV a un Dataframe con DuckDB
-    df = read_csv_with_duckdb(input_file)
+    df = read_csv_with_duckdb(config_file, input_file)
 
     # Aplicar transformaciones
     transformed_data = apply_transformations(config_file, df)

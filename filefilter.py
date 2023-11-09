@@ -1,37 +1,61 @@
-import duckdb
+import pandas as pd
 import yaml
 import sys
 from filters import *
 from Logger import Logger
-log = Logger("DEBUG")
+import os
+from tqdm import tqdm
+import psutil
 
-def read_csv_with_duckdb(config_file, input_file):
-    config = load_config(config_file, False)
-    if config.get('inDelimiter', None) is None:
-        sqlCommand = "SELECT * FROM read_csv_auto('" + input_file + "', HEADER=TRUE, SAMPLE_SIZE=1000000)"
-    elif config['inDelimiter'] == 'TAB' or config['inDelimiter'] == 'tab' or config['inDelimiter'] == '\t':
-        sqlCommand = "SELECT * FROM read_csv_auto('" + input_file + "', HEADER=TRUE, SAMPLE_SIZE=1000000, DELIM='\t')"
+log = Logger("DEBUG")
+global totalRows
+totalRows=0
+
+def applyRowFilter(index, row, filter_, df):
+    #log.debug("\t\tProcessing row " + str(index) + " with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
+    if filter_.get('actionType') == 'python':
+        modified_row_dict = pythonFilter(row, filter_.get('actionConfig'))
+        # Aplicar los cambios al DataFrame
+        for col, value in modified_row_dict.items():
+            try:
+                df.at[index, col] = value
+            except Exception as e:
+                log.debug(f"\t\tError applying change: {e}")
+    elif filter_.get('actionType') == 'rest':
+        modified_row_dict = restFilter(row, filter_.get('actionConfig'))
+        if 'response' not in df.columns:
+            df['response'] = None
+        # Aplicar los cambios al DataFrame
+        for col, value in modified_row_dict.items():
+            try:
+                df.at[index, col] = value
+            except Exception as e:
+                log.debug(f"\t\tError appliying change: {e}. index: {index}, col: {col}, value: {short(value, 100)}")          
     else:
-        sqlCommand = "SELECT * FROM read_csv_auto('" + input_file + "', HEADER=TRUE, SAMPLE_SIZE=1000000, DELIM='"+ config['inDelimiter'] +"')"
-    
-    log.info("Reading CSV file into dataframe 'df' " + input_file + ": Running: " + sqlCommand)
-    df=duckdb.query(sqlCommand).to_df()
-    log.debug("df content:\n" + str(df.head(5)))
-    return df
+        log.debug(f"Action type unknown: {filter_.get('actionType')}")
+
+def applyDfFilter(df, filter_):
+    #log.debug("Processing df with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
+    if filter_.get('actionType') == 'sql':
+        newDf = sqlFilter(df, filter_.get('actionConfig'))
+        df = newDf
+    elif filter_.get('actionType') == 'pandas':
+        newDf = pandasFilter(df, filter_.get('actionConfig'))
+        df = newDf
 
 def apply_transformations(config_file, df):
+    global totalRows
     config = load_config(config_file, True)
-
-    # Aplicar transformaciones
-    log.debug("Applying transformations...")
+    
     # Loop over each filter in config:
     for filter_ in config.get('filters', []):
         if filter_.get('disabled', False):
-            log.debug(f"\tFilter '{filter_.get('name', 'unnamed')}' is disabled, skipping...")
+            #log.debug(f"\tFilter '{filter_.get('name', 'unnamed')}' is disabled, skipping...")
             continue
         # This kind of filters loops over each record of df pandas dataframe:
         if filter_.get('actionType') == 'python' or filter_.get('actionType') == 'rest':
             for index, row in df.iterrows():
+                totalRows += 1
                 
                 if (config.get('sampleLines', 0)!=0 and index > config.get('sampleLines', 0)):
                     log.warn("Reached sampleLines (" + str(config.get('sampleLines', 0)) + ") limit, stopping...")
@@ -42,38 +66,11 @@ def apply_transformations(config_file, df):
                     log.debug("Reloading config file " + config_file + "...")
                     config = load_config(config_file, False)
 
-                if filter_.get('actionType') == 'python':
-                    log.debug("Processing row " + str(index) + " with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
-                    modified_row_dict = pythonFilter(row, filter_.get('actionConfig'))
-                    # Aplicar los cambios al DataFrame
-                    for col, value in modified_row_dict.items():
-                        try:
-                            df.at[index, col] = value
-                        except Exception as e:
-                            log.debug(f"\t\tError applying change: {e}")
-                elif filter_.get('actionType') == 'rest':
-                    log.debug("Processing row " + str(index) + " with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
-                    modified_row_dict = restFilter(row, filter_.get('actionConfig'))
-                    if 'response' not in df.columns:
-                        df['response'] = None
-                    # Aplicar los cambios al DataFrame
-                    for col, value in modified_row_dict.items():
-                        try:
-                            df.at[index, col] = value
-                        except Exception as e:
-                            log.debug(f"\t\tError appliying change: {e}. index: {index}, col: {col}, value: {short(value, 100)}")          
-                else:
-                    log.debug(f"Action type unknown: {filter_.get('actionType')}")
+                applyRowFilter(index, row, filter_, df)
+
         # This kind of filters act over the whole df pandas dataframe:
         elif filter_.get('actionType') == 'sql' or filter_.get('actionType') == 'pandas':
-            if filter_.get('actionType') == 'sql':
-                log.debug("Processing df with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
-                newDf = sqlFilter(df, filter_.get('actionConfig'))
-                df = newDf
-            elif filter_.get('actionType') == 'pandas':
-                log.debug("Processing df with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
-                newDf = pandasFilter(df, filter_.get('actionConfig'))
-                df = newDf
+            applyDfFilter(df, filter_)
     return df
 
 def short(value, length):
@@ -84,7 +81,7 @@ def short(value, length):
 
 def write_output(transformed_data, config_file, output_file):
     config = load_config(config_file, False)
-    log.info("Writing df to output file " + output_file + "...:\n" + str(transformed_data.head(5)))
+    #log.info("Writing df to output file " + output_file + "...:\n" + str(transformed_data.head(5)))
     if config['outDelimiter'] == 'TAB' or config['outDelimiter'] == 'tab' or config['outDelimiter'] == '\t':
         transformed_data.to_csv(output_file, sep='\t', index=True)
     else:
@@ -92,22 +89,46 @@ def write_output(transformed_data, config_file, output_file):
 
 def load_config(config_file, logConfig):
     with open(config_file, 'r') as f:
-        if logConfig: log.debug("Loading config file " + config_file + "...")
+        #if logConfig: log.debug("Loading config file " + config_file + "...")
         config = yaml.safe_load(f)
-        if logConfig: log.debug("Loaded config:\n" +yaml.dump(config, default_flow_style=False, sort_keys=False))
+        #if logConfig: log.debug("Loaded config:\n" +yaml.dump(config, default_flow_style=False, sort_keys=False))
     return config    
 
-def main(input_file, config_file, output_file):
-    # Leer el archivo CSV a un Dataframe con DuckDB
-    df = read_csv_with_duckdb(config_file, input_file)
+# Function to show memory usage if interactive is True
+def show_memory_usage(interactive):
+    if interactive:
+        tqdm.write(f"Memory usage: {psutil.Process().memory_info().rss / 1024 ** 2:.2f} MB")
 
-    # Aplicar transformaciones
-    transformed_data = apply_transformations(config_file, df)
-    # Escribir el archivo de salida
-    write_output(transformed_data, config_file, output_file)
+def main(input_file, config_file, output_file):
+    global totalRows
+    config=load_config(config_file, True)
+    chunkSize = config.get('chunkSize', 100000)
+    log.debug("Chunk size: " + str(chunkSize))
+    tmp_files = []
+    with tqdm(pd.read_csv(input_file, header=0, sep=';', encoding='utf-8', chunksize=chunkSize), unit="chunk") as pbar:
+        for index, chunk in enumerate(pbar):
+            pbar.set_description(f"Processing chunk {index}")
+            #log.debug("Applying transformations to chunk ("+ str(chunkSize) +") " + str(index) + ". Total rows processed: " + str(totalRows))
+            transformed_data = apply_transformations(config_file, chunk)
+            tmp_file_name = f"{output_file}_{index}.tmp"
+            tmp_files.append(tmp_file_name)
+            write_output(transformed_data, config_file, tmp_file_name)
+
+    # Concatenar todos los archivos temporales en un DataFrame
+    df_list = [pd.read_csv(tmp_file, sep='\t' if 'TAB' in tmp_file else ';', encoding='utf-8') for tmp_file in tmp_files]
+    combined_df = pd.concat(df_list, ignore_index=True)
+
+    # Escribir el DataFrame combinado en el archivo de salida final
+    final_output_file_name = f"{output_file}.csv"
+    combined_df.to_csv(final_output_file_name, sep=';', index=False, encoding='utf-8')
+
+    # Eliminar archivos temporales
+    for tmp_file in tmp_files:
+        os.remove(tmp_file)
+
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
+    if len(sys.argv) < 4:
         log.info("Uso: filefilter <fichero de entrada> <configuracion.yml> <fichero de salida>")
         sys.exit(1)
     

@@ -15,22 +15,27 @@ def applyRowFilter(index, row, filter_, df):
     #log.debug("\t\tProcessing row " + str(index) + " with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
     if filter_.get('actionType') == 'python':
         modified_row_dict = pythonFilter(row, filter_.get('actionConfig'))
-        # Aplicar los cambios al DataFrame
-        for col, value in modified_row_dict.items():
-            try:
-                df.at[index, col] = value
-            except Exception as e:
-                log.debug(f"\t\tError applying change: {e}")
+        if modified_row_dict is None:
+            log.error("\t\tError executing python code, skipping row " + str(index) + ". Row:" + str(row))
+        else: 
+            for col, value in modified_row_dict.items():
+                try:
+                    df.at[index, col] = value
+                except Exception as e:
+                    log.debug(f"\t\tError applying change: {e}")
     elif filter_.get('actionType') == 'rest':
         modified_row_dict = restFilter(row, filter_.get('actionConfig'))
         if 'response' not in df.columns:
             df['response'] = None
         # Aplicar los cambios al DataFrame
-        for col, value in modified_row_dict.items():
-            try:
-                df.at[index, col] = value
-            except Exception as e:
-                log.debug(f"\t\tError appliying change: {e}. index: {index}, col: {col}, value: {short(value, 100)}")          
+        if modified_row_dict is None:
+            log.error("\t\tError executing rest filter, skipping row " + str(index) + ". Row:" + str(row))
+        else:
+            for col, value in modified_row_dict.items():
+                try:
+                    df.at[index, col] = value
+                except Exception as e:
+                    log.debug(f"\t\tError appliying change: {e}. index: {index}, col: {col}, value: {short(value, 100)}")          
     else:
         log.debug(f"Action type unknown: {filter_.get('actionType')}")
 
@@ -54,19 +59,21 @@ def apply_transformations(config_file, df):
             continue
         # This kind of filters loops over each record of df pandas dataframe:
         if filter_.get('actionType') == 'python' or filter_.get('actionType') == 'rest':
-            for index, row in df.iterrows():
-                totalRows += 1
-                
-                if (config.get('sampleLines', 0)!=0 and index > config.get('sampleLines', 0)):
-                    log.warn("Reached sampleLines (" + str(config.get('sampleLines', 0)) + ") limit, stopping...")
-                    break
+            with tqdm(total=df.shape[0], desc="Applying row filter '"+ filter_.get('name', 'unknown') +"' of type "+ filter_.get('actionType', 'unknown') +" ", unit="row") as pbar:
+                for index, row in df.iterrows():
+                    totalRows += 1
+                    
+                    if (config.get('sampleLines', 0)!=0 and index > config.get('sampleLines', 0)):
+                        log.warn("Reached sampleLines (" + str(config.get('sampleLines', 0)) + ") limit, stopping...")
+                        break
 
-                # Reload config every reloadConfigEvery lines
-                if (config.get('reloadConfigEvery', 0)!=0 and index % config.get('reloadConfigEvery', 0) == 0):
-                    log.debug("Reloading config file " + config_file + "...")
-                    config = load_config(config_file, False)
+                    # Reload config every reloadConfigEvery lines
+                    if (config.get('reloadConfigEvery', 0)!=0 and index % config.get('reloadConfigEvery', 0) == 0):
+                        log.debug("Reloading config file " + config_file + "...")
+                        config = load_config(config_file, False)
 
-                applyRowFilter(index, row, filter_, df)
+                    applyRowFilter(index, row, filter_, df)
+                    pbar.update(1)
 
         # This kind of filters act over the whole df pandas dataframe:
         elif filter_.get('actionType') == 'sql' or filter_.get('actionType') == 'pandas':
@@ -107,6 +114,7 @@ def main(input_file, config_file, output_file):
     tmp_files = []
     with tqdm(pd.read_csv(input_file, header=0, sep=';', encoding='utf-8', chunksize=chunkSize), unit="chunk") as pbar:
         for index, chunk in enumerate(pbar):
+            
             pbar.set_description(f"Processing chunk {index}")
             #log.debug("Applying transformations to chunk ("+ str(chunkSize) +") " + str(index) + ". Total rows processed: " + str(totalRows))
             transformed_data = apply_transformations(config_file, chunk)

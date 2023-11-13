@@ -1,3 +1,7 @@
+
+# Indicate the input delimiter, use "TAB" or tab por tabs
+inDelimiter: ';'
+
 # Indicate the output delimiter, use "TAB" or tab por tabs
 outDelimiter: ','
 
@@ -9,6 +13,9 @@ sampleLines: 2
 
 # When to reload the configuration. Useful to adjust threads number at runtime
 reloadConfigEvery: 10
+
+# Size of the chunks to be processed. Useful to adjust memory usage
+chunkSize: 100000
 
 # Filters section
 filters:

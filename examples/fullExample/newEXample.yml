@@ -51,15 +51,14 @@ filters:
   - name: 'Inverse geocode'
     actionType: 'rest'
     disabled: False
-    code:
-      # Log request and/or response
-      logHttpRequests: False
-      logHttpResponses: False
-      # Get or Post
-      method: GET
-      # Host and path. Use {var} to access columns
-      host: "https://geocode.maps.co"
-      path: "reverse?lat={lat}&lon={lon}"
+    code: |
+      {
+        "logHttpRequests": false
+        "logHttpResponses": false
+        "method": GET,
+        "host": "https://geocode.maps.co",
+        "path": "reverse?lat={lat}&lon={lon}"
+      }
 
   - name: 'Extract some vars from JSON'
     actionType: 'python'

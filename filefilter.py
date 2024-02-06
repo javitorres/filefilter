@@ -15,7 +15,8 @@ def applyRowFilter(index, row, filter_, df):
     #log.debug("\t\tProcessing row " + str(index) + " with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
     #log.debug("\t\t\tRow: " + str(row))
     if filter_.get('actionType') == 'python':
-        modified_row_dict = pythonFilter(row, filter_.get('actionConfig'))
+        #print("Filter: " + str(filter_.get('code')))
+        modified_row_dict = pythonFilter(row, filter_.get('code'))
         if modified_row_dict is None:
             log.error("\t\tError executing python code, skipping row " + str(index) + ". Row:" + str(row))
         else: 

@@ -2,6 +2,7 @@ import requests
 from Logger import Logger
 import duckdb
 import json
+import yaml
 
 log = Logger("DEBUG")
 
@@ -11,45 +12,43 @@ def restFilter(row, actionConfig):
     path = actionConfig['path']
     method = actionConfig.get('method', 'GET')
 
-    # queryParamNames example: param1,param2
-    queryParamNames = actionConfig.get('queryParamNames', "")
-    # queryParamValues example: {paramValue1},{paramVale2}_{paramValue3}
-    queryParamValues = actionConfig.get('queryParamValues', "")
-    queryParamValues = queryParamValues.format(**row)
+    queryParams = actionConfig.get('queryParams', "")
+    queryParams = queryParams.format(**row)
 
-    # Build query params merging names and values
-    queryParams = dict(zip(queryParamNames.split(","), queryParamValues.split(",")))
-    # Build queryString
-    queryParamString = "&".join([f"{key}={value}" for key, value in queryParams.items()])
-
-    #log.debug("queryParamString:" + str(queryParamString))
-    #queryParams = queryParams.format(**row)
     path = path.format(**row)
 
     url = f"{host}/{path}"
 
     if actionConfig.get('logHttpRequests', False):
-        log.debug("\t\tRequest: " + url + "?" + queryParamString)
+        log.debug("\t\tRequest: " + url + "?" + queryParams)
 
-    if actionConfig.get('urlencodeParams', False):
-        response = requests.request(method, url, params=queryParamString)
+    if (method == 'GET'):
+        if actionConfig.get('urlencodeParams', False):
+            response = requests.request(method, url, params=queryParams)
+        else:
+            response = requests.request(method, url, params=queryParams)
     else:
-        response = requests.request(method, url, params=queryParamString)
+        postBody = actionConfig.get('postBody', "")
+        postBody = postBody.format(**row)
+        postBody = json.dumps(yaml.safe_load(postBody))
+        headers = {'Content-Type': 'application/json'}
+        response = requests.request(method, url, data=postBody, headers=headers)
 
     if response.status_code == 200:
         if actionConfig.get('logHttpResponses', False):
             log.debug("\t\tResponse:" + str(json.dumps(response.json())))
         # Add full json as new columns to the row
         row_dict = row.to_dict()
-        row_dict['response'] = json.dumps(response.json())
+        row_dict[actionConfig.get('newField', 'response')] = json.dumps(response.json())
         return row_dict
     else:
-        log.debug(f"\t\tError al hacer la petición REST: {response.status_code} URL: {url}?{queryParamString}")
+        log.debug(f"\t\tError al hacer la petición REST: http {response.status_code} URL: {url}?{queryParams}")
 
 ############################################################################
-def pythonFilter(row, actionConfig):
-    codeObject = compile(str(actionConfig['code']), 'sumstring', 'exec')
+def pythonFilter(row, code):
+    #print("Code: " + str(code))
     try:
+        codeObject = compile(code, 'sumstring', 'exec')
         row_dict = row.to_dict()
         res = exec(codeObject, {"row": row_dict})
         return row_dict

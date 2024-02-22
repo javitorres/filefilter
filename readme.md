@@ -70,4 +70,8 @@ Showing with a CSV viewer like VisiData:
 
 ![Captura desde 2023-11-05 17-49-57](https://github.com/javitorres/filefilter/assets/4235424/a5e311a3-614b-4bf0-bc47-3c39b821eed8)
 
-
+TODO
+Run python code as UDF functions
+    https://duckdb.org/docs/api/python/function.html
+    https://duckdb.org/docs/sql/functions/overview.html
+    https://duckdb.org/2023/07/07/python-udf.html

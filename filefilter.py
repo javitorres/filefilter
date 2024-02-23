@@ -9,9 +9,12 @@ import logging as log
 import queue
 from ConsumerManager import ConsumerManager
 import pandas as pd
+import tracemalloc
 
 lastStatusPrint = 0
 KILL = object()
+
+tracemalloc.start()
 
 
 def applyDfFilter(df, filter_):
@@ -74,17 +77,20 @@ def consumer(idConsumer, jobQueue, outPutQueue):
         row_dict = dict(zip(job['columns'], job['row']))
         modified_row_dict = applyRowFilter(job['rowIndex'], row_dict, job['filter'])
         if modified_row_dict is None:
-            log.error("\t\tError executing python code, skipping row " + str(job['rowIndex']) + ". Row:\n" + str(row_dict))
+            log.error(
+                "\t\tError executing python code, skipping row " + str(job['rowIndex']) + ". Row:\n" + str(row_dict))
         else:
             # log.info("Consumer " + idConsumer + " processed row:" + str(modified_row_dict))
             outPutQueue.put(modified_row_dict)
 
 
-def printStatus(manager, chunkIndex, rowIndex, totalRows, filterThreads, interactive=False):
+def printStatus(manager, chunkIndex, rowIndex, totalRows, filter_, interactive=False):
+    filterThreads = filter_.get('filterThreads', 1)
     # sleep
     # time.sleep(0.2)
     global lastStatusPrint
-    message = "Processed rows: " + str(totalRows) + " Chunk: " + str(chunkIndex) + " Last row index: " + str(
+    message = "Filter " + str(filter_["index"]) + " (" + filter_["name"] + "): " + " Processed rows: " + str(
+        totalRows) + " Chunk: " + str(chunkIndex) + " Last row index: " + str(
         rowIndex) + " Queue size:" + str(manager.getQueueSize()) + " Consumers: " + str(
         manager.getActiveConsumers()) + " Threads: " + str(filterThreads) + " " + getMemoryUsage()
     if interactive:
@@ -126,21 +132,23 @@ def main():
     startTime = int(round(time.time() * 1000))
     db.loadTable(table_name, input_file, sampleLines)
     rowsLoaded = db.runQuery("SELECT count(*) as rows FROM " + table_name, False)
-    log.info("Loaded table with " + str(rowsLoaded['rows'][0]) + "(sample lines "+ str(sampleLines) +") records in " + str(
-        int(round(time.time() * 1000)) - startTime) + " ms " + str(getMemoryUsage()))
+    log.info(
+        "Loaded table with " + str(rowsLoaded['rows'][0]) + " records (sample lines " + str(sampleLines) + ") in " + str(
+            int(round(time.time() * 1000)) - startTime) + "ms " + str(getMemoryUsage()))
 
-    cursor = db.getCursor()
-    cursor.execute("SELECT * FROM " + table_name + limitClause)
-    chunkIndex = 0
 
-    # Get column names
-    columns = [description[0] for description in cursor.description]
-    log.info("Column names: " + str(columns))
-
-    totalRows = 0
     filterIndex = 0
     # For each filter
     for filter_ in config.get('filters', []):
+        totalRows = 0
+        # Load or Reload data
+        cursor = db.getCursor()
+        cursor.execute("SELECT * FROM " + table_name + limitClause)
+        chunkIndex = 0
+        columns = [description[0] for description in cursor.description]
+        log.info("Column names: " + str(columns))
+
+        log.info("Processing filter " + str(filterIndex) + " (" + filter_.get('name', 'NoName') + ")...")
         filterThreads = filter_.get('filterThreads', 1)
         log.info("Max threads: " + str(filterThreads))
         manager = ConsumerManager(queue.Queue(), filterThreads)
@@ -164,6 +172,7 @@ def main():
                     break
 
                 rowIndex = 0
+                # For each row in chunk
                 for row in rowChunk:
 
                     if manager.getActiveConsumers() < filterThreads:
@@ -177,7 +186,7 @@ def main():
                         manager.stop_consumer()
 
                     while manager.getQueueSize() > filterThreads * 5:
-                        #log.info("Queue has " + str(manager.getQueueSize()) + " jobs. Waiting before loading more jobs. Consumers: " + str(manager.getActiveConsumers()))
+                        # log.info("Queue has " + str(manager.getQueueSize()) + " jobs. Waiting before loading more jobs. Consumers: " + str(manager.getActiveConsumers()))
                         time.sleep(0.5)
 
                     job = {'columns': columns, 'row': row, 'rowIndex': rowIndex, 'filter': filter_}
@@ -185,11 +194,30 @@ def main():
 
                     rowIndex += 1
                     totalRows += 1
-                    printStatus(manager, chunkIndex, rowIndex, totalRows, filterThreads, interactive)
+                    printStatus(manager, chunkIndex, rowIndex, totalRows, filter_, interactive)
 
+                # Save chunk
+                outPutChunk = manager.getOutput()
+                newPd = pd.DataFrame(outPutChunk)
+                exists = True
+                try:
+                    db.runQuery("SELECT * FROM filter" + str(filterIndex) + " LIMIT 1", True)
+                except:
+                    exists = False
+
+                if exists:
+                    log.info("Table filter" + str(filterIndex) + " exists, inserting...")
+                    db.runQuery("INSERT INTO filter" + str(filterIndex) + " SELECT * FROM newPd", True)
+                else:
+                    log.info("Table filter" + str(filterIndex) + " does not exist, creating...")
+                    db.runQuery("CREATE TABLE filter" + str(filterIndex) + " AS SELECT * FROM newPd", True)
+                # We set the table name to the new table for next filter
+                table_name = "filter" + str(filterIndex)
+                limitClause = ""
                 chunkIndex += 1
+
             log.info("No more rows")
-            printStatus(manager, chunkIndex, 0, totalRows, filterThreads, interactive)
+            printStatus(manager, chunkIndex, 0, totalRows, filter_, interactive)
             log.info("Stopping consumers...")
             consumersStopped = 0
             while manager.getActiveConsumers() > 0:
@@ -207,17 +235,22 @@ def main():
             # END DF FILTER
 
         filterIndex += 1
-        outPutChunk = manager.getOutput()
-        log.info("Output chunk size: " + str(len(outPutChunk)))
-        # Write output
-        if len(outPutChunk) > 0:
-            transformed_data = pd.DataFrame(outPutChunk)
-            write_output(transformed_data, config_file, output_file)
-            log.info("Wrote output to " + output_file)
-        else:
-            log.info("No data to write to " + output_file)
+
 
     # END FOR EACH FILTER
+
+    # Save to output file
+    log.info("Saving to output file " + output_file + "...")
+    df = db.runQuery("COPY (SELECT * FROM filter" + str(filterIndex-1) + ") TO '" + output_file + "' (FORMAT CSV, DELIMITER '"+ config['outDelimiter'] +"')", True)
+
+    # https://docs.python.org/es/3/library/tracemalloc.html
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics('lineno')
+
+    print("[ Top 10 ]")
+    for stat in top_stats[:10]:
+        print(stat)
+
 
 if __name__ == "__main__":
     format = "%(asctime)s %(filename)s:%(lineno)d - %(message)s "
@@ -227,13 +260,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Procesa un archivo de datos usando filtros definidos en un archivo de configuración.")
 
-    # Agregar argumentos
     parser.add_argument("input_file", help="Archivo de entrada de datos.")
     parser.add_argument("config_file", help="Archivo de configuración en formato YAML.")
     parser.add_argument("output_file", help="Archivo de salida donde se escribirán los datos procesados.")
     parser.add_argument("-i", "--interactive", type=bool, default=False, help="Modo interactivo (True o False).")
-
-    # Analizar los argumentos
     args = parser.parse_args()
 
     main()

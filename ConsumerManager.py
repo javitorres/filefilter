@@ -5,6 +5,8 @@ import queue
 
 KILL = object()
 
+# Based on https://realpython.com/intro-to-python-threading/
+
 class ConsumerManager:
     def __init__(self, jobQueue, maxConsumers):
         self.jobQueue = jobQueue

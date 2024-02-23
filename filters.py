@@ -6,8 +6,6 @@ import yaml
 from urllib.parse import quote
 from CompiledCodeCache import CompiledCodeCache
 
-
-
 log = Logger("DEBUG")
 
 ############################################################################
@@ -23,7 +21,6 @@ def restFilter(row, actionConfig):
     if "{" in queryParams:
         log.debug(f"\t\tError: Not all parameters are filled in queryParams: {queryParams}")
         return {}
-    
 
     postBody = actionConfig.get('postBody', "")
     postBody = postBody.format(**row)
@@ -39,7 +36,7 @@ def restFilter(row, actionConfig):
     if (method == 'GET'):
         if actionConfig.get('urlencodeParams', False):
             queryParams = quote(queryParams, safe='')
-        
+
         if actionConfig.get('logHttpRequests', False):
             log.debug("\t\t" + method + " Request: " + url + "?" + queryParams)
         response = requests.request(method, url, params=queryParams)
@@ -57,23 +54,25 @@ def restFilter(row, actionConfig):
         row_dict[actionConfig.get('newField', 'response')] = json.dumps(response.json())
         return row_dict
     else:
-        log.debug(f"\t\tError al hacer la petición REST: http {response.status_code} URL: {url}?{queryParams}   ROW: {row}")
+        log.debug(
+            f"\t\tError al hacer la petición REST: http {response.status_code} URL: {url}?{queryParams}   ROW: {row}")
 
 ############################################################################
 def pythonFilter(filterIndex, row, code):
     CompiledCodeCache().get_compiled_code(filterIndex, code)
     try:
         codeObject = compile(code, 'sumstring', 'exec')
-        row_dict = row.to_dict()
-        res = exec(codeObject, {"row": row_dict})
-        return row_dict
+        exec(codeObject, {"row": row})
+        return row
     except Exception as e:
         log.debug(f"\t\tError running python code: {e}")
+
 ############################################################################
 def sqlFilter(df, actionConfig):
     sql = actionConfig['sql']
     newDf = duckdb.query(sql).to_df()
     return newDf
+
 ############################################################################
 def pandasFilter(df, actionConfig):
     codeObject = compile(str(actionConfig['code']), 'sumstring', 'exec')

@@ -10,12 +10,12 @@ import queue
 from ConsumerManager import ConsumerManager
 import pandas as pd
 import tracemalloc
+import gc
 
 lastStatusPrint = 0
 KILL = object()
 
 tracemalloc.start()
-
 
 def applyDfFilter(df, filter_):
     # log.debug("Processing df with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
@@ -26,22 +26,13 @@ def applyDfFilter(df, filter_):
         newDf = pandasFilter(df, filter_.get('actionConfig'))
         df = newDf
 
-
-def write_output(transformed_data, config_file, output_file):
-    config = load_config(config_file, False)
-    # log.info("Writing df to output file " + output_file + "...:\n" + str(transformed_data.head(5)))
-    if config['outDelimiter'] == 'TAB' or config['outDelimiter'] == 'tab' or config['outDelimiter'] == '\t':
-        transformed_data.to_csv(output_file, sep='\t', index=True)
-    else:
-        transformed_data.to_csv(output_file, sep=config['outDelimiter'], index=True)
-
-
 # Function to show memory usage if interactive is True
 def getMemoryUsage():
     return f"Memory usage: {psutil.Process().memory_info().rss / 1024 ** 2:.2f} MB"
 
 
 def applyRowFilter(rowIndex, row_dict, filter_):
+    log.info("actionType: " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
     if filter_.get('actionType') == 'python':
         # print("Filter: " + str(filter_.get('code')))
         modified_row_dict = pythonFilter(filter_.get('filterIndex'), row_dict, filter_.get('code'))
@@ -49,9 +40,10 @@ def applyRowFilter(rowIndex, row_dict, filter_):
             return modified_row_dict
 
     elif filter_.get('actionType') == 'rest':
+        log.info("Processing row " + str(rowIndex) + " with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
         modified_row_dict = restFilter(row_dict, filter_.get('actionConfig'))
-        if 'response' not in row_dict.columns:
-            row_dict['response'] = None
+        #if 'response' not in row_dict.columns:
+        #    row_dict['response'] = None
         if modified_row_dict is None:
             log.error("\t\tError executing rest filter, skipping row " + str(rowIndex) + ". Row:" + str(row_dict))
         else:
@@ -104,6 +96,17 @@ def printStatus(manager, chunkIndex, rowIndex, totalRows, filter_, interactive=F
     else:
         log.info(message)
 
+''' Reset the number of threads for each filter '''
+def setNewThreads(config, newConfig):
+    changed = False
+    for newFilterConfig in newConfig.get('filters', []):
+        for filter in config.get('filters', []):
+            if newFilterConfig['name'] == filter['name']:
+                if newFilterConfig['filterThreads'] != filter['filterThreads']:
+                    log.info("Changing threads for filter " + newFilterConfig['name'] + ": " + str(filter['filterThreads']) + " -> " + str(newFilterConfig['filterThreads']))
+                    filter['filterThreads'] = newFilterConfig['filterThreads']
+                    changed = True
+    return changed
 
 def main():
     input_file = args.input_file
@@ -113,6 +116,7 @@ def main():
 
     log.info("Starting filefilter...interactive:" + str(interactive))
     config = load_config(config_file, True)
+    lastConfigLoaded = int(round(time.time() * 1000))
     chunkSize = config.get('chunkSize', 100000)
     limitClause = ""
     # If we are sampling, use only one chunk
@@ -136,10 +140,13 @@ def main():
         "Loaded table with " + str(rowsLoaded['rows'][0]) + " records (sample lines " + str(sampleLines) + ") in " + str(
             int(round(time.time() * 1000)) - startTime) + "ms " + str(getMemoryUsage()))
 
-
     filterIndex = 0
     # For each filter
     for filter_ in config.get('filters', []):
+        if filter_.get('disabled', False):
+            log.info("Filter " + str(filterIndex) + "(" + filter_.get('name', 'NoName') + ") is disabled, skipping...")
+            continue
+
         totalRows = 0
         # Load or Reload data
         cursor = db.getCursor()
@@ -153,9 +160,7 @@ def main():
         log.info("Max threads: " + str(filterThreads))
         manager = ConsumerManager(queue.Queue(), filterThreads)
         filter_['index'] = filterIndex
-        if filter_.get('disabled', False):
-            log.info("Filter " + str(filterIndex) + "(" + filter_.get('name', 'NoName') + ") is disabled, skipping...")
-            continue
+
 
         # LINE FILTER: This kind of filters (python and rest) loops over each record of df pandas dataframe:
         if (filter_.get('actionType') == 'python' or
@@ -174,9 +179,19 @@ def main():
                 rowIndex = 0
                 # For each row in chunk
                 for row in rowChunk:
+                    if config.get('reloadConfigEverySeconds') != 0 and (lastConfigLoaded + config.get(
+                            'reloadConfigEverySeconds') * 1000 < int(round(time.time() * 1000))):
+                        log.debug("Reloading config file " + config_file + "...")
+                        newConfig = load_config(config_file, False)
+                        changed = setNewThreads(config, newConfig)
+                        if changed:
+                            filterThreads = filter_.get('filterThreads', 1)
+                            manager.setMaxConsumers(filterThreads)
+                        filterThreads = filter_.get('filterThreads', 1)
+                        lastConfigLoaded = int(round(time.time() * 1000))
 
                     if manager.getActiveConsumers() < filterThreads:
-                        log.info("Starting consumer " + str(manager.getActiveConsumers()) + " objetive: " + str(
+                        log.info("Starting consumer " + str(manager.getActiveConsumers()+1) + " objetive: " + str(
                             filterThreads))
                         manager.start_consumer(consumer)
                         time.sleep(0.10)
@@ -196,6 +211,9 @@ def main():
                     totalRows += 1
                     printStatus(manager, chunkIndex, rowIndex, totalRows, filter_, interactive)
 
+                mem_db = db.runQuery("PRAGMA database_size", False)
+                log.info("Database size: " + str(mem_db) + " bytes")
+
                 # Save chunk
                 outPutChunk = manager.getOutput()
                 newPd = pd.DataFrame(outPutChunk)
@@ -214,6 +232,14 @@ def main():
                 # We set the table name to the new table for next filter
                 table_name = "filter" + str(filterIndex)
                 limitClause = ""
+
+                # https://docs.python.org/es/3/library/tracemalloc.html
+                snapshot = tracemalloc.take_snapshot()
+                top_stats = snapshot.statistics('lineno')
+
+                print("[ Top 10 ]")
+                for stat in top_stats[:10]:
+                    print(stat)
                 chunkIndex += 1
 
             log.info("No more rows")
@@ -224,6 +250,7 @@ def main():
                 manager.stop_consumer()
                 consumersStopped += 1
             log.info("Stopped " + str(consumersStopped) + " consumers")
+            cursor.close()
             # END LINE FILTER
 
         # This kind of filters act over the whole df pandas dataframe:
@@ -243,13 +270,7 @@ def main():
     log.info("Saving to output file " + output_file + "...")
     df = db.runQuery("COPY (SELECT * FROM filter" + str(filterIndex-1) + ") TO '" + output_file + "' (FORMAT CSV, DELIMITER '"+ config['outDelimiter'] +"')", True)
 
-    # https://docs.python.org/es/3/library/tracemalloc.html
-    snapshot = tracemalloc.take_snapshot()
-    top_stats = snapshot.statistics('lineno')
 
-    print("[ Top 10 ]")
-    for stat in top_stats[:10]:
-        print(stat)
 
 
 if __name__ == "__main__":

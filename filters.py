@@ -9,53 +9,67 @@ from CompiledCodeCache import CompiledCodeCache
 log = Logger("DEBUG")
 
 ############################################################################
-def restFilter(row, actionConfig):
+def restFilter(row_dict, actionConfig):
     host = actionConfig['host']
     path = actionConfig['path']
     method = actionConfig.get('method', 'GET')
 
     queryParams = actionConfig.get('queryParams', "")
-    queryParams = queryParams.format(**row)
+    try:
+        queryParams = queryParams.format(**row_dict)
+    except Exception as e:
+        log.debug(f"\t\tError mapping parameter: {e}")
+        return None
 
     # If not all parameters are filled, skip this row
     if "{" in queryParams:
         log.debug(f"\t\tError: Not all parameters are filled in queryParams: {queryParams}")
         return {}
 
-    postBody = actionConfig.get('postBody', "")
-    postBody = postBody.format(**row)
-    # If not all parameters are filled, skip this row
-    if "{" in postBody:
-        log.debug(f"\t\tError: Not all parameters are filled in postBody: {postBody}")
-        return {}
-    postBody = json.dumps(yaml.safe_load(postBody))
+    if (method == 'POST'):
+        postBody = actionConfig.get('postBody', "")
+        postBody = postBody.format(**row_dict)
+        # If not all parameters are filled, skip this row
+        if "{" in postBody:
+            log.debug(f"\t\tError: Not all parameters are filled in postBody: {postBody}")
+            return {}
+        postBody = json.dumps(yaml.safe_load(postBody))
 
-    path = path.format(**row)
+    path = path.format(**row_dict)
     url = f"{host}/{path}"
 
+    response = None
     if (method == 'GET'):
         if actionConfig.get('urlencodeParams', False):
             queryParams = quote(queryParams, safe='')
 
         if actionConfig.get('logHttpRequests', False):
             log.debug("\t\t" + method + " Request: " + url + "?" + queryParams)
-        response = requests.request(method, url, params=queryParams)
+        try:
+            response = requests.request(method, url, params=queryParams)
+        except Exception as e:
+            log.debug(f"\t\tError making REST request: {e}")
+            return None
     else:
         headers = {'Content-Type': 'application/json'}
         if actionConfig.get('logHttpRequests', False):
             log.debug("\t\t" + method + " Request: " + url + "?" + queryParams + " Body: " + postBody)
-        response = requests.request(method, url, data=postBody, headers=headers)
+            try:
+                response = requests.request(method, url, data=postBody, headers=headers)
+            except Exception as e:
+                log.debug(f"\t\tError making REST request: {e}")
+                return None
 
     if response.status_code == 200:
         if actionConfig.get('logHttpResponses', False):
             log.debug("\t\tResponse:" + str(json.dumps(response.json())))
         # Add full json as new columns to the row
-        row_dict = row.to_dict()
+        #row_dict = row.to_dict()
         row_dict[actionConfig.get('newField', 'response')] = json.dumps(response.json())
         return row_dict
     else:
         log.debug(
-            f"\t\tError al hacer la petición REST: http {response.status_code} URL: {url}?{queryParams}   ROW: {row}")
+            f"\t\tError al hacer la petición REST: http {response.status_code} URL: {url}?{queryParams}   ROW: {row_dict}")
 
 ############################################################################
 def pythonFilter(filterIndex, row, code):

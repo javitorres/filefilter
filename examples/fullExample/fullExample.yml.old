@@ -9,13 +9,13 @@ outDelimiter: ';'
 filterThreads: 1
 
 # How many lines to be processed, 0 for all the lines. Useful to keep low during development
-sampleLines: 2
+sampleLines: 0
 
 # When to reload the configuration. Useful to adjust threads number at runtime
 reloadConfigEvery: 1000
 
 # Size of the chunks to be processed. Useful to adjust memory usage
-chunkSize: 99993
+chunkSize: 10000
 
 # Filters section
 filters:
@@ -51,14 +51,15 @@ filters:
   - name: 'Inverse geocode'
     actionType: 'rest'
     disabled: False
-    code: |
-      {
-        "logHttpRequests": false
-        "logHttpResponses": false
-        "method": GET,
-        "host": "https://geocode.maps.co",
-        "path": "reverse?lat={lat}&lon={lon}"
-      }
+    code:
+      # Log request and/or response
+      logHttpRequests: False
+      logHttpResponses: False
+      # Get or Post
+      method: GET
+      # Host and path. Use {var} to access columns
+      host: "https://geocode.maps.co"
+      path: "reverse?lat={lat}&lon={lon}"
 
   - name: 'Extract some vars from JSON'
     actionType: 'python'

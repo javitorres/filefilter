@@ -18,16 +18,19 @@ def init(databaseName):
 
 
 class Database:
-    def __init__(self, databaseName):
+    def __init__(self, databaseName, deleteDatabase=False):
         format = "%(asctime)s %(filename)s:%(lineno)d - %(message)s "
         log.basicConfig(format=format, level=log.INFO, datefmt="%H:%M:%S")
         log.info("Initializing DB...")
 
-        # Check if data folder existsin filesistem and create if not
+        # Check if data folder exists in filesistem and create if not
         log.info("Checking data folder...")
         if not os.path.exists("data"):
             os.makedirs("data")
-
+        # If the database exists and deleteDatabase is True, delete it
+        if os.path.exists("data/" + databaseName) and deleteDatabase:
+            log.info("Deleting database...")
+            os.remove("data/" + databaseName)
         init(databaseName)
 
         self.serverStatus = {}
@@ -37,14 +40,28 @@ class Database:
         return self.serverStatus
 
     ####################################################
-    def runQuery(self, query, logQuery=True):
+    def getQueryResult(self, query, logQuery=True):
         try:
             if (logQuery):
                 log.info("Executing query: " + str(query))
 
+            # Here it seems there is a memory leak
             r = db.query(query)
             if (r is not None):
                 return r.df()
+            else:
+                return None
+        except Exception as e:
+            log.error("Error running query: " + str(e))
+            raise e
+
+    def executeQuery(self, query, logQuery=True):
+        try:
+            if (logQuery):
+                log.info("Executing query: " + str(query))
+
+            db.query(query)
+
         except Exception as e:
             log.error("Error running query: " + str(e))
             raise e

@@ -1,36 +1,27 @@
-
 # Indicate the input delimiter, use "TAB" or tab por tabs
 inDelimiter: ';'
-
 # Indicate the output delimiter, use "TAB" or tab por tabs
 outDelimiter: ';'
-
-# How many threads to process the file.
-filterThreads: 1
-
 # How many lines to be processed, 0 for all the lines. Useful to keep low during development
 sampleLines: 0
-
 # When to reload the configuration. Useful to adjust threads number at runtime
 reloadConfigEvery: 1000
-
 # Size of the chunks to be processed. Useful to adjust memory usage
-chunkSize: 10000
+chunkSize: 99993
 
 # Filters section
 filters:
     # Filter name and/or description
   - name: 'Add locations'
-
     # Filter type pandas. Possible filters are: over full df: pandas, sql. Over each line: python or rest
-    actionType: 'pandas'
-
+    actionType: 'python'
     # If True this filter will not be used
     disabled: False
-
-
+    # Number of threads to be used. Useful to adjust performance. 1 by default if not specified
+    filterThreads: 5
     # Multiline section for python code
     code: |
+      # Generates random coordinates for each row
       import pandas as pd
       import random
 
@@ -41,25 +32,39 @@ filters:
       lon_e = -3.517
 
       def genCoords(lat_norte, lat_sur, lon_oeste, lon_este):
-        latitud = random.uniform(lat_sur, lat_norte)
-        longitud = random.uniform(lon_oeste, lon_este)
-        return pd.Series({'latitud': latitud, 'longitud': longitud})
+        latitude = random.uniform(lat_sur, lat_norte)
+        longitude = random.uniform(lon_oeste, lon_este)
+        return {'latitude': latitude, 'longitude': longitude}
 
-      df[['lat', 'lon']] = df.apply(lambda x: genCoords(lat_n, lat_s, lon_w, lon_e), axis=1)
-      print(df)
+      coords = genCoords(lat_n, lat_s, lon_w, lon_e)
+      row['lat'] = coords['latitude']
+      row['lon'] = coords['longitude']
 
   - name: 'Inverse geocode'
     actionType: 'rest'
-    disabled: False
-    code:
-      # Log request and/or response
+    # Filter disabled because this service needs an apikey
+    disabled: True
+    actionConfig:
       logHttpRequests: False
       logHttpResponses: False
-      # Get or Post
       method: GET
-      # Host and path. Use {var} to access columns
       host: "https://geocode.maps.co"
-      path: "reverse?lat={lat}&lon={lon}"
+      path: "reverse"
+      queryParams: lat={lat}&lon={lon}
+      newField: "geocode"
+
+  - name: 'Simulate data'
+    # Filter type pandas. Possible filters are: over full df: pandas, sql. Over each line: python or rest
+    actionType: 'python'
+    # If True this filter will not be used
+    disabled: False
+    # Number of threads to be used. Useful to adjust performance. 1 by default if not specified
+    filterThreads: 5
+    # Multiline section for python code
+    code: |
+      # Generates fake JSON data for each row
+      import json
+      row['geocode'] = json.dumps({'address': 'Calle de la Princesa, 1, 28008 Madrid, Spain', 'state': 'Madrid', 'country': 'Spain'})
 
   - name: 'Extract some vars from JSON'
     actionType: 'python'
@@ -67,36 +72,19 @@ filters:
     # Multiline section for python code. Use row to access the current row
     code: |
       import json
-      json_string = row.get("response", {})
+      json_string = row['geocode']
+      # print("Log: " + str(json_string))
       obj = json.loads(json_string)
-      row['display_name']=obj.get('display_name',{})
-      row['state']=obj.get('address',{}).get('state', '')
-
-  - name: 'Extract all vars from JSON'
-    actionType: 'python'
-    disabled: False
-    # Multiline section for python code. Use row to access the current row
-    code: |
-      import json
-      import pandas as pd
-      json_string = row.get("response", {})
-      jsonO = json.loads(json_string)
-      df = pd.json_normalize(jsonO)
-      print("DF:" + str(df))
-
-      # For each column in the dataframe
-      for col in df.columns:
-        # Add a new column with the name of the column and the value
-        row[col] = df[col][0]
-
+      row['address']=obj.get('address',{})
+      row['state']=obj.get('state',{})
 
   - name: 'Select final fields using DuckDB SQL'
     actionType: 'sql'
-    disabled: True
+    disabled: False
     # Multiline section for SQL code. Use df to access the current dataframe
-    sql: |
+    code: |
       --- Exclude the original lat and lon and the response
       SELECT
-        * EXCLUDE(lat, lon, response)
+        * EXCLUDE(lat, lon, geocode)
       FROM
-        df;
+        df

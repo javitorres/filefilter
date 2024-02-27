@@ -66,10 +66,18 @@ def restFilter(row_dict, actionConfig):
         # Add full json as new columns to the row
         #row_dict = row.to_dict()
         row_dict[actionConfig.get('newField', 'response')] = json.dumps(response.json())
-        return row_dict
+        result = {}
+        result['row'] = row_dict
+        result['status_code'] = response.status_code
+        return result
     else:
         log.debug(
             f"\t\tError al hacer la petición REST: http {response.status_code} URL: {url}?{queryParams}   ROW: {row_dict}")
+        result = {}
+        result['row'] = None
+        result['status_code'] = response.status_code
+        return result
+
 
 ############################################################################
 def pythonFilter(filterIndex, row, code):
@@ -82,10 +90,11 @@ def pythonFilter(filterIndex, row, code):
         log.debug(f"\t\tError running python code: {e}")
 
 ############################################################################
-def sqlFilter(df, actionConfig):
-    sql = actionConfig['sql']
-    newDf = duckdb.query(sql).to_df()
-    return newDf
+def sqlFilter(filter_):
+    sql = filter_['code']
+    index = str(filter_['index'])
+    duckdb.query("CREATE OR REPLACE TABLE filter" + index +" AS (" + sql + ")")
+
 
 ############################################################################
 def pandasFilter(df, actionConfig):

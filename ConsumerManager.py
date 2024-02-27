@@ -34,6 +34,7 @@ class ConsumerManager:
     def stop_consumer(self):
         with self.lock:
             if self.active_consumers > 0:
+                log.debug(f"Stopping consumer")
                 self.jobQueue.put(KILL)
                 self.active_consumers -= 1
     

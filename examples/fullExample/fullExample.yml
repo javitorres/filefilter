@@ -6,8 +6,7 @@ outDelimiter: ';'
 sampleLines: 0
 # When to reload the configuration. Useful to adjust threads number at runtime
 reloadConfigEvery: 1000
-# Size of the chunks to be processed. Useful to adjust memory usage
-chunkSize: 99993
+
 
 # Filters section
 filters:

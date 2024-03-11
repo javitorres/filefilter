@@ -15,6 +15,7 @@ def restFilter(row_dict, actionConfig):
     method = actionConfig.get('method', 'GET')
 
     queryParams = actionConfig.get('queryParams', "")
+
     try:
         queryParams = queryParams.format(**row_dict)
     except Exception as e:
@@ -25,6 +26,13 @@ def restFilter(row_dict, actionConfig):
     if "{" in queryParams:
         log.debug(f"\t\tError: Not all parameters are filled in queryParams: {queryParams}")
         return {}
+
+    # queryParams is a string with parameters to be filled with values from the row in format: metadata.minReliability=0.8&metadata.maxResults=1&direccioncompleta={address}&codigomunicipioine={codigo_municipio}&codigoprovinciaine={codigo_provincia}&codigopostal={cp}
+    # For each parameter in queryParams urlencode it
+    #log.info("------------------------------\nqueryParams: " + queryParams)
+    if actionConfig.get('urlencodeParams', False):
+        queryParams = "&".join([f"{k}={quote(v, safe='')}" for k, v in [param.split("=") for param in queryParams.split("&")]])
+    #log.info("queryParams: " + queryParams)
 
     if (method == 'POST'):
         postBody = actionConfig.get('postBody', "")
@@ -40,9 +48,6 @@ def restFilter(row_dict, actionConfig):
 
     response = None
     if (method == 'GET'):
-        if actionConfig.get('urlencodeParams', False):
-            queryParams = quote(queryParams, safe='')
-
         if actionConfig.get('logHttpRequests', False):
             log.debug("\t\t" + method + " Request: " + url + "?" + queryParams)
         try:

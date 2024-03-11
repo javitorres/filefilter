@@ -74,7 +74,21 @@ class Database:
             limitClause=""
             if (limit > 0):
                 limitClause = " LIMIT " + str(limit)
-            db.query("CREATE TABLE " + table_name + " AS (SELECT * FROM read_csv_auto('" + file_name + "', HEADER=TRUE, SAMPLE_SIZE=1000000) " + limitClause + ")")
+
+            if (file_name.startswith("s3://")):
+                db.execute("CREATE SECRET (TYPE S3, PROVIDER CREDENTIAL_CHAIN, REGION 'eu-west-1');")
+                db.execute("INSTALL httpfs")
+                db.execute("LOAD httpfs")
+
+            if file_name.lower().endswith(".csv") or file_name.lower().endswith(".txt") or file_name.lower().endswith(".tsv"):
+                createTableQuery = "CREATE TABLE " + table_name + " AS (SELECT * FROM read_csv_auto('" + file_name + "') " + limitClause + ")"
+            elif file_name.lower().endswith(".parquet"):
+                createTableQuery = "CREATE TABLE " + table_name + " AS (SELECT * FROM read_parquet_auto('" + file_name + "') " + limitClause + ")"
+            else:
+                raise Exception("File format not supported")
+
+            log.info("Executing query: " + createTableQuery)
+            db.query(createTableQuery)
 
             r = db.sql('SHOW TABLES')
         except Exception as e:

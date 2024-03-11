@@ -8,6 +8,8 @@ class StatsManager:
         self.total_time = 0
 
     def register(self, processing_time):
+        if processing_time == 0:
+            processing_time = 1
         self.times.append(processing_time)
         self.total_rows += 1
         self.total_time += processing_time
@@ -18,12 +20,16 @@ class StatsManager:
             r = sum(self.times) / len(self.times) if self.times else 0
         else:
             r = sum(list(self.times)[-last_n_rows:]) / last_n_rows
+
         return r
 
 
-    def get_eta(self, pending_rows):
+    def get_eta(self, pending_rows, workers):
         avg = self.avg_time()
-        milliseconds = avg * pending_rows
-        #print("MillisecondsETA: ", int(milliseconds), " HH:MM:SS:", time.strftime('%H:%M:%S', time.gmtime(milliseconds)))
+        milliseconds = avg * pending_rows / workers
+        #if (pending_rows % 10000 == 0):
+            #print("MillisecondsETA: ", int(milliseconds), " HH:MM:SS:", time.strftime('%H:%M:%S', time.gmtime(milliseconds)), " Queue:", str(self.times))
+        #print("MillisecondsETA: ", int(milliseconds), " HH:MM:SS:", time.strftime('%H:%M:%S', time.gmtime(milliseconds)), " Queue:", str(self.times))
         # Get in HH:MM:SS format
-        return time.strftime('%H:%M:%S', time.gmtime(milliseconds))
+        return time.strftime('%H:%M:%S', time.gmtime(milliseconds / 1000))
+        #return str(round(milliseconds/1000/60, 2)) + " minutes"

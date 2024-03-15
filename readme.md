@@ -24,7 +24,6 @@ Filter types:
 
 * **sql**: executes SQL code provided in the actionConfig.sql field using duckdb on the dataframe df. The result of this query replaces the current dataframe.
 
-* **pandas**: This filter executes Python code specified in the actionConfig.code section with the current df. The result of this query replaces the current dataframe.
 
 
 # Configuration

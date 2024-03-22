@@ -1,0 +1,111 @@
+
+file: examples/fullExample/fullExample.txt
+id
+1
+2
+3
+4
+5
+
+file: examples/fullExample/fullExample.yml
+# Indicate the input delimiter, use "TAB" or tab por tabs
+inDelimiter: ';'
+# Indicate the output delimiter, use "TAB" or tab por tabs
+outDelimiter: ';'
+# How many lines to be processed, 0 for all the lines. Useful to keep low during development
+sampleLines: 0
+# When to reload the configuration. Useful to adjust threads number at runtime
+reloadConfigEvery: 1000
+
+
+# Filters section
+filters:
+    # Filter name and/or description
+  - name: 'Add locations'
+    # Filter type pandas. Possible filters are: over full df: pandas, sql. Over each line: python or rest
+    actionType: 'python'
+    # If True this filter will not be used
+    disabled: False
+    # Number of threads to be used. Useful to adjust performance. 1 by default if not specified
+    filterThreads: 5
+    # Multiline section for python code
+    code: |
+      # Generates random coordinates for each row
+      import pandas as pd
+      import random
+
+      # Coords limits
+      lat_n = 40.643
+      lat_s = 40.340
+      lon_w = -3.888
+      lon_e = -3.517
+
+      def genCoords(lat_norte, lat_sur, lon_oeste, lon_este):
+        latitude = random.uniform(lat_sur, lat_norte)
+        longitude = random.uniform(lon_oeste, lon_este)
+        return {'latitude': latitude, 'longitude': longitude}
+
+      coords = genCoords(lat_n, lat_s, lon_w, lon_e)
+      row['lat'] = coords['latitude']
+      row['lon'] = coords['longitude']
+
+  - name: 'Inverse geocode'
+    actionType: 'rest'
+    # Filter disabled because this service needs an apikey
+    disabled: True
+    actionConfig:
+      logHttpRequests: False
+      logHttpResponses: False
+      method: GET
+      host: "https://geocode.maps.co"
+      path: "reverse"
+      queryParams: lat={lat}&lon={lon}
+      newField: "geocode"
+
+  - name: 'Simulate data'
+    # Filter type pandas. Possible filters are: over full df: pandas, sql. Over each line: python or rest
+    actionType: 'python'
+    # If True this filter will not be used
+    disabled: False
+    # Number of threads to be used. Useful to adjust performance. 1 by default if not specified
+    filterThreads: 5
+    # Multiline section for python code
+    code: |
+      # Generates fake JSON data for each row
+      import json
+      row['geocode'] = json.dumps({'address': 'Calle de la Princesa, 1, 28008 Madrid, Spain', 'state': 'Madrid', 'country': 'Spain'})
+
+  - name: 'Extract some vars from JSON'
+    actionType: 'python'
+    disabled: False
+    # Multiline section for python code. Use row to access the current row
+    code: |
+      import json
+      json_string = row['geocode']
+      # print("Log: " + str(json_string))
+      obj = json.loads(json_string)
+      row['address']=obj.get('address',{})
+      row['state']=obj.get('state',{})
+
+  - name: 'Select final fields using DuckDB SQL'
+    actionType: 'sql'
+    disabled: False
+    # Multiline section for SQL code. Use df to access the current dataframe
+    code: |
+      --- Exclude the original lat and lon and the response
+      SELECT
+        * EXCLUDE(lat, lon, geocode)
+      FROM
+        df
+
+If I run command: python3 filefilter.py examples/fullExample/fullExample.txt examples/fullExample/fullExample.yml /tmp/output.csv -d
+
+I get /tmp/output.csv with the following content:
+id;address;state
+1;Calle de la Princesa, 1, 28008 Madrid, Spain;Madrid
+2;Calle de la Princesa, 1, 28008 Madrid, Spain;Madrid
+3;Calle de la Princesa, 1, 28008 Madrid, Spain;Madrid
+4;Calle de la Princesa, 1, 28008 Madrid, Spain;Madrid
+5;Calle de la Princesa, 1, 28008 Madrid, Spain;Madrid
+
+The input and output files are defined in the command line

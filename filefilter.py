@@ -273,7 +273,8 @@ def main():
 
     # Save to output file
     log.info("Saving to output file " + output_file + "...")
-    db.executeQuery("COPY (SELECT * FROM filter" + str(lastFilterIndex) + ") TO '" + output_file + "' (FORMAT CSV, DELIMITER '"+ config['outDelimiter'] +"')", True)
+    outDelimiter = config.get('outDelimiter', ',')
+    db.executeQuery("COPY (SELECT * FROM filter" + str(lastFilterIndex) + ") TO '" + output_file + "' (FORMAT CSV, DELIMITER '"+ outDelimiter +"')", True)
 
 
 def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db, filterIndex, filter_, interactive,

@@ -36,6 +36,7 @@ def getMemoryUsage():
 
 
 def applyRowFilter(rowIndex, row_dict, filter_):
+    log.info("__________________Processing row " + str(rowIndex) + " with filter " + str(filter_.get('index')) + " (" + filter_.get('name', 'NoName') + ")...")
     if filter_.get('actionType') == 'python':
         # print("Filter: " + str(filter_.get('code')))
         modified_row_dict = pythonFilter(filter_.get('filterIndex'), row_dict, filter_.get('code'))
@@ -51,6 +52,7 @@ def applyRowFilter(rowIndex, row_dict, filter_):
         return result
 
     elif filter_.get('actionType') == 'rest':
+
         result = restFilter(row_dict, filter_.get('actionConfig'))
         # result['row'] and result['status_code']
         if result.get('status_code')/100 == 2:
@@ -86,16 +88,17 @@ def consumer(idConsumer, jobQueue, outPutQueue):
         start_time  = int(round(time.time() * 1000))
         result = {'row': None}
         try:
+            log.info("______Consumer " + idConsumer + " processing row " + str(job['rowIndex']) + "..." + " filter:" + str(job['filter'].get('index')) + " (" + job['filter'].get('name', 'NoName') + ")")
             result = applyRowFilter(job['rowIndex'], row_dict, job['filter'])
+            log.info("______Consumer2222")
         except Exception as e:
-            log.error("Error processing line, skipping row " + str(job['rowIndex']) + ". Row:\n" + str(row_dict))
+            log.error(" #### Error processing line:" + str(e))
 
         end_time = int(round(time.time() * 1000))
         statsManager.register(end_time - start_time)
 
         if result.get('row') is None:
-            log.error(
-                "\t\tError executing python code, skipping row " + str(job['rowIndex']) + ". Row:\n" + str(row_dict))
+            log.error("\t\tNew row is none, skipping row " + str(job['rowIndex']) + ". Row:\n" + str(row_dict))
         else:
             #log.info("Filter errors:" + str(job['filter'].get('errors',0)) + " 20X:" + str(job['filter'].get('20X',0)) + " 30X:" + str(job['filter'].get('30X',0)) + " 40X:" + str(job['filter'].get('40X',0)) + " 50X:" + str(job['filter'].get('50X',0)))
             #log.info("Consumer " + idConsumer + " processed row")
@@ -172,7 +175,9 @@ def main():
     # Load data
     startTime = int(round(time.time() * 1000))
     db.loadTable(table_name, input_file, sampleLines)
-    rowsLoaded = db.getQueryResult("SELECT count(*) as rows FROM " + table_name, False)
+
+    db.executeQuery("CREATE OR REPLACE VIEW df AS SELECT * FROM " + table_name, True)
+    rowsLoaded = db.getQueryResult("SELECT count(*) as rows FROM df", True)
     rowsLoaded = rowsLoaded['rows'][0]
     log.info(
         "Loaded table with " + str(rowsLoaded) + " records (sample lines " + str(sampleLines) + ") in " + str(
@@ -231,8 +236,6 @@ def main():
                 process_status['output_file'] = output_file
                 process_status['table_name'] = table_name
 
-
-
                 limitClause, table_name = line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
                                                   filterIndex, filter_, interactive, lastConfigLoaded, limitClause,
                                                   output_file, table_name, totalChunks, totalRows)
@@ -242,7 +245,6 @@ def main():
 
         # This kind of filters act over the whole df pandas dataframe:
         elif (filter_.get('actionType') == 'sql'):
-
             log.info("Processing df with " + filter_.get('actionType', 'unknown') + " filter '" + filter_.get('name', 'unnamed') + "'")
             db.executeQuery("CREATE OR REPLACE TABLE filter" + str(filterIndex) + " AS (" + filter_.get('code') + ")")
 
@@ -323,7 +325,11 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
         log.info("Saving chunk data: " + str(newPd.shape))
 
         if exists:
+            log.info("Select *")
+            db.executeQuery("SELECT * FROM newPd", True)
+
             log.info("Table filter" + str(filterIndex) + " exists, inserting...")
+
             db.executeQuery("INSERT INTO filter" + str(filterIndex) + " SELECT * FROM newPd", True)
         else:
             log.info("Table filter" + str(filterIndex) + " does not exist, creating...")

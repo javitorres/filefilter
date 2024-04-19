@@ -5,8 +5,13 @@ import json
 import yaml
 from urllib.parse import quote
 from CompiledCodeCache import CompiledCodeCache
+import logging as log
 
-log = Logger("DEBUG")
+#log = Logger("DEBUG")
+
+def __init__(self):
+    format = "%(asctime)s %(filename)s:%(lineno)d - %(message)s "
+    log.basicConfig(format=format, level=log.INFO, datefmt="%H:%M:%S")
 
 ############################################################################
 def restFilter(row_dict, actionConfig):
@@ -86,13 +91,14 @@ def restFilter(row_dict, actionConfig):
 
 ############################################################################
 def pythonFilter(filterIndex, row, code):
-    CompiledCodeCache().get_compiled_code(filterIndex, code)
+    #print("Code: ", code)
+    codeObject = CompiledCodeCache().get_compiled_code(filterIndex, code)
+
     try:
-        codeObject = compile(code, 'sumstring', 'exec')
         exec(codeObject, {"row": row})
         return row
     except Exception as e:
-        log.debug(f"\t\tError running python code: {e}")
+        log.error(f"\t\tError running python code: {e}")
 
 ############################################################################
 def sqlFilter(filter_):

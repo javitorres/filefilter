@@ -55,6 +55,7 @@ class Database:
             log.error("Error running query: " + str(e))
             raise e
 
+    ####################################################
     def executeQuery(self, query, logQuery=True):
         try:
             if (logQuery):

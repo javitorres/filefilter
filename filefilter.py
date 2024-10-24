@@ -1,5 +1,6 @@
+import gc
+import typer
 from tabulate import tabulate
-import argparse
 from filters import *
 import os
 import psutil
@@ -12,7 +13,12 @@ from ConsumerManager import ConsumerManager
 import pandas as pd
 import tracemalloc
 import StatsManager as statsManager
+from rich import print  # pip install rich
+from rich.table import Table
+from rich.console import Console
+from rich.logging import RichHandler
 
+console = Console()
 statsManager = statsManager.StatsManager()
 
 lastStatusPrint = 0
@@ -36,7 +42,7 @@ def getMemoryUsage():
 
 
 def applyRowFilter(rowIndex, row_dict, filter_):
-    log.info("__________________Processing row " + str(rowIndex) + " with filter " + str(filter_.get('index')) + " (" + filter_.get('name', 'NoName') + ")...")
+    #log.info("__________________Processing row " + str(rowIndex) + " with filter " + str(filter_.get('index')) + " (" + filter_.get('name', 'NoName') + ")...")
     if filter_.get('actionType') == 'python':
         # print("Filter: " + str(filter_.get('code')))
         modified_row_dict = pythonFilter(filter_.get('filterIndex'), row_dict, filter_.get('code'))
@@ -88,9 +94,9 @@ def consumer(idConsumer, jobQueue, outPutQueue):
         start_time  = int(round(time.time() * 1000))
         result = {'row': None}
         try:
-            log.info("______Consumer " + idConsumer + " processing row " + str(job['rowIndex']) + "..." + " filter:" + str(job['filter'].get('index')) + " (" + job['filter'].get('name', 'NoName') + ")")
+            #log.info("______Consumer " + idConsumer + " processing row " + str(job['rowIndex']) + "..." + " filter:" + str(job['filter'].get('index')) + " (" + job['filter'].get('name', 'NoName') + ")")
             result = applyRowFilter(job['rowIndex'], row_dict, job['filter'])
-            log.info("______Consumer2222")
+            #log.info("______Consumer2222")
         except Exception as e:
             log.error(" #### Error processing line:" + str(e))
 
@@ -123,9 +129,7 @@ def printStatus(manager, chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRo
         # Print only every 100 ms
         if force or lastStatusPrint + 100 < int(round(time.time() * 1000)):
             # Delete console line
-            print(
-                "\033[A                                                                                                                    \033[A")
-            print(message)
+            console.print(message, end="\r")
             lastStatusPrint = int(round(time.time() * 1000))
     else:
         log.info(message)
@@ -142,19 +146,8 @@ def setNewThreads(config, newConfig):
                     changed = True
     return changed
 
-def main():
-    input_file = args.input_file
-    config_file = args.config_file
-    output_file = args.output_file
-    interactive = args.interactive
-    delete = args.delete
-
-    log.info("Starting filefilter...")
-    log.info("Input file: " + input_file)
-    log.info("Config file: " + config_file)
-    log.info("Output file: " + output_file)
-    log.info("Interactive mode: " + str(interactive))
-    log.info("Delete previous process data: " + str(delete))
+def mainProcess(input_file: str, config_file: str, output_file: str, interactive: bool = False, delete: bool = False):
+    console.log("[bold green]Starting...[/bold green]")
 
     config = load_config(config_file, True)
     lastConfigLoaded = int(round(time.time() * 1000))
@@ -315,26 +308,30 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
         # Save chunk
         outPutChunk = manager.getOutput()
         newPd = pd.DataFrame(outPutChunk)
-        exists = True
+        exists = False
         try:
-            db.getQueryResult("SELECT * FROM filter" + str(filterIndex) + " LIMIT 1", True)
-        except:
-            exists = False
+            exists = db.checkIfTableExists("filter" + str(filterIndex))
+        except Exception as e:
+            log.debug("Error: " + str(e))
 
         # show newPd
         log.info("Saving chunk data: " + str(newPd.shape))
 
         if exists:
-            log.info("Select *")
+            #log.info("Select *")
+            db.register('newPd', newPd)
             db.executeQuery("SELECT * FROM newPd", True)
 
             log.info("Table filter" + str(filterIndex) + " exists, inserting...")
 
             db.executeQuery("INSERT INTO filter" + str(filterIndex) + " SELECT * FROM newPd", True)
         else:
-            log.info("Table filter" + str(filterIndex) + " does not exist, creating...")
+
+            db.register('newPd', newPd)
             try:
-                db.executeQuery("CREATE TABLE filter" + str(filterIndex) + " AS SELECT * FROM newPd", True)
+                log.info("Table filter" + str(filterIndex) + " does not exist, creating...")
+                db.executeQuery("CREATE TABLE filter" + str(filterIndex) + " AS (SELECT * FROM newPd)", True)
+                log.info("Table filter" + str(filterIndex) + " created")
             except Exception as e:
                 log.error("Error creating table: " + str(e) + " trying to storing file and load from there...")
                 newPd.to_csv(output_file, index=False)
@@ -369,7 +366,7 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
 def processChunk(chunkIndex, columns, config, config_file, filterThreads, filter_, interactive, lastConfigLoaded,
                 manager, rowChunk, rowIndex, rowsInChunk, totalChunks, totalRows):
     for row in rowChunk:
-        log.debug("Processing row " + str(rowIndex) + " of chunk " + str(chunkIndex) + "...")
+        #log.debug("Processing row " + str(rowIndex) + " of chunk " + str(chunkIndex) + "...")
         if config.get('reloadConfigEverySeconds', 0) != 0 and (lastConfigLoaded + config.get(
                 'reloadConfigEverySeconds') * 1000 < int(round(time.time() * 1000))):
             log.debug("Reloading config file " + config_file + "...")
@@ -400,22 +397,35 @@ def processChunk(chunkIndex, columns, config, config_file, filterThreads, filter
         rowIndex += 1
         totalRows += 1
         printStatus(manager, chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRows, filter_, interactive, False)
+    # Free mem
+    del rowChunk
+    gc.collect()
     return rowIndex, totalRows
 
+def main(
+        input_file: str,
+        config_file: str,
+        output_file: str,
+        interactive: bool = typer.Option(False, "-i", "--interactive", help="Run in interactive mode"),
+        delete: bool = typer.Option(False, "-d", "--delete", help="Delete previous process data"),
+        verbose: bool = typer.Option(False, "-v", "--verbose", help="Verbose mode")
+    ):
+    logLevel = log.INFO
+    if verbose:
+        logLevel = log.DEBUG
+    format = "%(asctime)s %(filename)s:%(lineno)d - %(message)s "
+    log.basicConfig(
+        format=format,
+        level=logLevel,
+        datefmt="%H:%M:%S",
+        handlers = [RichHandler()])
+
+    log.info(f"Input file: {input_file}")
+    log.info(f"Config file: {config_file}")
+    log.info(f"Output file: {output_file}")
+    log.info(f"Interactive mode: {interactive}")
+    log.info(f"Delete previous data: {delete}")
+    mainProcess(input_file, config_file, output_file, interactive, delete)
 
 if __name__ == "__main__":
-    format = "%(asctime)s %(filename)s:%(lineno)d - %(message)s "
-    log.basicConfig(format=format, level=log.INFO, datefmt="%H:%M:%S")
-
-    # Crear el parser
-    parser = argparse.ArgumentParser(
-        description="Process a file using preconfigured filters")
-
-    parser.add_argument("input_file", help="Input file")
-    parser.add_argument("config_file", help="Configuration file in YAML format")
-    parser.add_argument("output_file", help="Output file")
-    parser.add_argument("-i", "--interactive", action="store_true", help="Interactive mode")
-    parser.add_argument("-d", "--delete", action="store_true", help="Previous process data")
-    args = parser.parse_args()
-
-    main()
+    typer.run(main)

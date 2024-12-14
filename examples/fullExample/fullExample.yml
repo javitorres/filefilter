@@ -22,7 +22,7 @@ filters:
     code: |
       # Generates random coordinates for each row
       import pandas as pd
-      import random
+      import random as rand
 
       # Coords limits
       lat_n = 40.643
@@ -31,8 +31,8 @@ filters:
       lon_e = -3.517
 
       def genCoords(lat_norte, lat_sur, lon_oeste, lon_este):
-        latitude = random.uniform(lat_sur, lat_norte)
-        longitude = random.uniform(lon_oeste, lon_este)
+        latitude = rand.uniform(lat_sur, lat_norte)
+        longitude = rand.uniform(lon_oeste, lon_este)
         return {'latitude': latitude, 'longitude': longitude}
 
       coords = genCoords(lat_n, lat_s, lon_w, lon_e)
@@ -84,6 +84,6 @@ filters:
     code: |
       --- Exclude the original lat and lon and the response
       SELECT
-        * EXCLUDE(lat, lon, geocode)
+        * EXCLUDE(lat)
       FROM
         df

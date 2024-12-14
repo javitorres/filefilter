@@ -208,27 +208,6 @@ def mainProcess(input_file: str, config_file: str, output_file: str, interactive
                 filter_.get('actionType') == 'rest'):
 
             try:
-                # Define object with fields: chunkIndex, chunkSize, columns, config, config_file, cursor, db,,filterIndex, filter_, interactive, lastConfigLoaded, limitClause, output_file, table_name, totalChunks, totalRows
-                process_status = {}
-                process_status['chunkIndex'] = chunkIndex
-                process_status['totalChunks'] = totalChunks
-                process_status['chunkSize'] = chunkSize
-
-                process_status['totalRows'] = totalRows
-
-                process_status['columns'] = columns
-                process_status['config'] = config
-                process_status['config_file'] = config_file
-                process_status['cursor'] = cursor
-                process_status['db'] = db
-                #process_status['filterIndex'] = filterIndex
-                process_status['filter_'] = filter_
-                process_status['interactive'] = interactive
-                process_status['lastConfigLoaded'] = lastConfigLoaded
-                process_status['limitClause'] = limitClause
-                process_status['output_file'] = output_file
-                process_status['table_name'] = table_name
-
                 limitClause, table_name = line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
                                                   filterIndex, filter_, interactive, lastConfigLoaded, limitClause,
                                                   output_file, table_name, totalChunks, totalRows)
@@ -248,7 +227,6 @@ def mainProcess(input_file: str, config_file: str, output_file: str, interactive
             log.debug("Action type unknown: " + filter_.get('actionType'))
             # END DF FILTER
 
-        # Create or replace view df from filter table. This view is to be used in the next filter as "df"
         db.executeQuery("CREATE OR REPLACE VIEW df AS SELECT * FROM filter" + str(filterIndex), True)
         lastFilterIndex = filterIndex
 
@@ -259,6 +237,7 @@ def mainProcess(input_file: str, config_file: str, output_file: str, interactive
                 log.info("Show example data from current data")
                 log.info("\n" + tabulate(df, headers='keys', tablefmt='fancy_grid'))
             else:
+                pd.option_context('display.max_columns', None)
                 log.info(df)
         else:
             log.info("No data to show")

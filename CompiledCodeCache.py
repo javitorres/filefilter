@@ -17,7 +17,7 @@ class CompiledCodeCache:
         if compiled_code:
             return compiled_code
         else:
-            log.info("Code NOT found in cache")
+            #log.debug("Code NOT found in cache")
             try:
                 code_object = compile(code, 'sumstring', 'exec')
                 self._cache[id] = code_object

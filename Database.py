@@ -1,6 +1,7 @@
 import duckdb
 import os
 import logging as log
+import pandas as pd
 
 
 class Database:
@@ -65,6 +66,7 @@ class Database:
             self.connection.execute(f"DROP TABLE IF EXISTS {table_name}")
 
             limitClause = f" LIMIT {limit}" if limit > 0 else ""
+            delimClause = ", delim=';'"
 
             if file_name.startswith("s3://"):
                 self.connection.execute("CREATE SECRET (TYPE S3, PROVIDER CREDENTIAL_CHAIN, REGION 'eu-west-1');")
@@ -72,9 +74,9 @@ class Database:
                 self.connection.execute("LOAD httpfs;")
 
             if file_name.lower().endswith((".csv", ".txt", ".tsv")):
-                createTableQuery = f"CREATE TABLE {table_name} AS (SELECT * FROM read_csv_auto('{file_name}') {limitClause})"
+                createTableQuery = f"CREATE TABLE {table_name} AS (SELECT * FROM read_csv('{file_name}' {delimClause}) {limitClause})"
             elif file_name.lower().endswith(".parquet"):
-                createTableQuery = f"CREATE TABLE {table_name} AS (SELECT * FROM read_parquet_auto('{file_name}') {limitClause})"
+                createTableQuery = f"CREATE TABLE {table_name} AS (SELECT * FROM read_parquet('{file_name}') {limitClause})"
             else:
                 raise Exception("File format not supported")
 

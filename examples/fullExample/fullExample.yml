@@ -39,7 +39,7 @@ filters:
       row['lat'] = coords['latitude']
       row['lon'] = coords['longitude']
 
-  - name: 'Inverse geocode'
+  - name: 'Inverse geocode with GET'
     actionType: 'rest'
     # Filter disabled because this service needs an apikey
     disabled: True
@@ -51,6 +51,22 @@ filters:
       path: "reverse"
       queryParams: lat={lat}&lon={lon}
       newField: "geocode"
+
+  - name: 'Inverse geocode with POST'
+    actionType: 'rest'
+    # Filter disabled because this service needs an apikey
+    disabled: True
+    actionConfig:
+      logHttpRequests: False
+      logHttpResponses: False
+      method: POST
+      host: "https://geocode.maps.co"
+      path: "reverse"
+      postBody: |
+        lat: {lat}
+        lon: {lon}
+      newField: "geocodePost"
+
 
   - name: 'Simulate data'
     # Filter type pandas. Possible filters are: over full df: pandas, sql. Over each line: python or rest

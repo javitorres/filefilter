@@ -60,13 +60,13 @@ class Database:
             raise e
 
     ####################################################
-    def loadTable(self, table_name, file_name, limit=0):
+    def loadTable(self, table_name, file_name, limit=0, inDelimiter=None):
         try:
             log.info(f"Loading file into {table_name} from {file_name}")
             self.connection.execute(f"DROP TABLE IF EXISTS {table_name}")
 
             limitClause = f" LIMIT {limit}" if limit > 0 else ""
-            delimClause = ", delim=';'"
+            delimClause = ", delim='"+ inDelimiter + "'"
 
             if file_name.startswith("s3://"):
                 self.connection.execute("CREATE SECRET (TYPE S3, PROVIDER CREDENTIAL_CHAIN, REGION 'eu-west-1');")

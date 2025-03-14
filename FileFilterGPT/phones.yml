@@ -1,0 +1,16 @@
+filters:
+  - name: 'Validar formato de teléfonos'
+    actionType: 'python'
+    disabled: False
+    code: |
+      import re
+
+      def validar_telefono(numero):
+          if re.match(r'^9\d{8}$', numero):
+              return 'fijo'
+          elif re.match(r'^6\d{8}$', numero):
+              return 'movil'
+          else:
+              return 'error'
+
+      row['tipo_telefono'] = validar_telefono(str(row['telefono']))

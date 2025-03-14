@@ -11,8 +11,6 @@ filters:
       method: GET
       host: "https://restcountries.com"
       path: "v3.1/name/{countryName}"
-      queryParamNames: ""
-      queryParamValues: ""
       urlencodeParams: false
       fieldsToLoad: ""
       newFieldNames: ""

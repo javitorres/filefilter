@@ -2,6 +2,9 @@ __pycache__/
 misPruebas
 *.csv
 fullExample.txt.out
-
-
-
+.idea
+data
+filters
+trabajos
+venv
+privateGpt

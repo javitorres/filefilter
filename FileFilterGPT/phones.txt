@@ -1,0 +1,3 @@
+Example:
+I have a file with phone numbers. I need a YAML file that validates whether they are in the format 9XXXXXXXX, in which case I want a new column indicating type=fixed, and if they are 6XXXXXXXX, it should indicate type=mobile. In any other case, type=error
+

@@ -29,7 +29,7 @@ def restFilter(row_dict, actionConfig):
 
     # If not all parameters are filled, skip this row
     if "{" in queryParams:
-        log.debug(f"\t\tError: Not all parameters are filled in queryParams: {queryParams}")
+        log.error(f"\t\tError: Not all parameters are filled in queryParams: {queryParams}")
         return {}
 
     # queryParams is a string with parameters to be filled with values from the row in format: metadata.minReliability=0.8&metadata.maxResults=1&direccioncompleta={address}&codigomunicipioine={codigo_municipio}&codigoprovinciaine={codigo_provincia}&codigopostal={cp}
@@ -44,7 +44,7 @@ def restFilter(row_dict, actionConfig):
         postBody = postBody.format(**row_dict)
         # If not all parameters are filled, skip this row
         if "{" in postBody:
-            log.debug(f"\t\tError: Not all parameters are filled in postBody: {postBody}")
+            log.error(f"\t\tError: Not all parameters are filled in postBody: {postBody}")
             return {}
         postBody = json.dumps(yaml.safe_load(postBody))
 
@@ -54,25 +54,25 @@ def restFilter(row_dict, actionConfig):
     response = None
     if (method == 'GET'):
         if actionConfig.get('logHttpRequests', False):
-            log.debug("\t\t" + method + " Request: " + url + "?" + queryParams)
+            log.info("\t\t" + method + " Request: " + url + "?" + queryParams)
         try:
             response = requests.request(method, url, params=queryParams)
         except Exception as e:
-            log.debug(f"\t\tError making REST request: {e}")
+            log.error(f"\t\tError making REST request: {e}")
             return None
     else:
         headers = {'Content-Type': 'application/json'}
         if actionConfig.get('logHttpRequests', False):
-            log.debug("\t\t" + method + " Request: " + url + "?" + queryParams + " Body: " + postBody)
+            log.info("\t\t" + method + " Request: " + url + "?" + queryParams + " Body: " + postBody)
             try:
                 response = requests.request(method, url, data=postBody, headers=headers)
             except Exception as e:
-                log.debug(f"\t\tError making REST request: {e}")
+                log.error(f"\t\tError making REST request: {e}")
                 return None
 
     if response.status_code == 200:
         if actionConfig.get('logHttpResponses', False):
-            log.debug("\t\tResponse:" + str(json.dumps(response.json())))
+            log.info("\t\tResponse:" + str(json.dumps(response.json())))
         # Add full json as new columns to the row
         #row_dict = row.to_dict()
         row_dict[actionConfig.get('newField', 'response')] = json.dumps(response.json())
@@ -81,7 +81,7 @@ def restFilter(row_dict, actionConfig):
         result['status_code'] = response.status_code
         return result
     else:
-        log.debug(
+        log.error(
             f"\t\tError al hacer la petición REST: http {response.status_code} URL: {url}?{queryParams}   ROW: {row_dict}")
         result = {}
         result['row'] = None

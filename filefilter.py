@@ -66,6 +66,9 @@ def applyRowFilter(rowIndex, row_dict, filter_):
 
     elif actionType == 'rest':
         result = restFilter(row_dict, filter_.get('actionConfig'))
+        if result is None:
+            log.error("restFilter returned None. Using default status_code 500.")
+            result = {'status_code': 500}
         status_code = result.get('status_code', 0)
         if status_code // 100 == 2:
             filter_['20X'] = filter_.get('20X', 0) + 1
@@ -283,10 +286,11 @@ def mainProcess(input_file: str, config_file: str, output_file: str, interactive
     fileName = os.path.basename(input_file)
     db = Database(fileName + ".db", delete)
     table_name = fileName.replace(".", "_")
+    inDelimiter = config.get('inDelimiter', None)
 
     log.info(getMemoryUsage())
     startTime = int(round(time.time() * 1000))
-    db.loadTable(table_name, input_file, sampleLines)
+    db.loadTable(table_name, input_file, sampleLines, inDelimiter)
     db.executeQuery(f"CREATE OR REPLACE VIEW df AS SELECT * FROM {table_name}", True)
 
     rowsLoaded = db.getQueryResult("SELECT count(*) as rows FROM df", True)

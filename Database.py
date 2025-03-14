@@ -2,6 +2,7 @@ import duckdb
 import os
 import logging as log
 import pandas as pd
+from tabulate import tabulate
 
 
 class Database:
@@ -98,6 +99,9 @@ class Database:
     def register(self, name, df):
         try:
             log.info(f"Registering DataFrame as table '{name}'")
+            df = df.astype({col: "float64" for col in df.select_dtypes(include=["float"]).columns})
+            df = df.astype({col: "string" for col in df.select_dtypes(include=["object"]).columns})
+
             self.connection.register(name, df)
             # Verificación inmediata
             test_query = self.connection.execute(f"SELECT * FROM {name} LIMIT 1").fetchdf()

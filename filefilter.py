@@ -16,6 +16,7 @@ import StatsManager as statsManager
 from rich import print
 from rich.console import Console
 from rich.logging import RichHandler
+import sys
 
 console = Console()
 statsManager = statsManager.StatsManager()
@@ -111,7 +112,7 @@ def consumer(idConsumer, jobQueue, outPutQueue):
             log.error(f"\t\tNew row is None, skipping row {job['rowIndex']}. Row:\n{row_dict}")
         else:
             outPutQueue.put(result.get('row'))
-    log.info(f"Stopped consumer {idConsumer}...")
+    log.debug(f"Stopped consumer {idConsumer}...")
 
 def printStatus(manager, chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRows, filter_, interactive=False, force=False):
     global statsManager
@@ -196,7 +197,7 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
                 lastConfigLoaded, limitClause, output_file, table_name, totalChunks, totalRows):
     """Process a line-based filter (python/rest) that requires iteration over each row."""
     filterThreads = filter_.get('filterThreads', 1)
-    log.info("Max threads: " + str(filterThreads))
+    log.debug("Max threads: " + str(filterThreads))
     manager = ConsumerManager(queue.Queue(), filterThreads)
 
     rows_pending = True
@@ -208,7 +209,7 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
             rows_pending = False
             break
 
-        log.info(f"Loaded chunk {chunkIndex} with {rowsInChunk} records. {getMemoryUsage()}")
+        log.debug(f"Loaded chunk {chunkIndex} with {rowsInChunk} records. {getMemoryUsage()}")
 
         rowIndex = 0
         rowIndex, totalRows = processChunk(
@@ -220,21 +221,21 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
         # Wait for consumers to finish processing
         while manager.getQueueSize() > 0:
             time.sleep(0.5)
-            log.info(f"Waiting for consumers to finish chunk queue ({manager.getQueueSize()})...")
+            log.debug(f"Waiting for consumers to finish chunk queue ({manager.getQueueSize()})...")
 
         # Force status print at the end of the chunk
         printStatus(manager, chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRows, filter_, interactive, True)
 
         mem_db = db.getQueryResult("PRAGMA database_size", False)
         mem_db_dict = mem_db.to_dict()
-        log.info(f"Database memory_usage: {mem_db_dict['memory_usage']} bytes")
+        #log.info(f"Database memory_usage: {mem_db_dict['memory_usage']} bytes")
 
         # Save results for this chunk
         outPutChunk = manager.getOutput()
         newPd = pd.DataFrame(outPutChunk)
         exists = db.checkIfTableExists("filter" + str(filterIndex))
 
-        log.info(f"Saving chunk data: {newPd.shape}")
+        log.debug(f"Saving chunk data: {newPd.shape}")
         db.register('newPd', newPd)
 
         if exists:
@@ -243,10 +244,10 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
             db.executeQuery("INSERT INTO filter" + str(filterIndex) + " SELECT * FROM newPd", True)
         else:
             # Si no existe, la creamos
-            log.info(f"Table filter{filterIndex} does not exist, creating...")
+            log.debug(f"Table filter{filterIndex} does not exist, creating...")
             try:
                 db.executeQuery(f"CREATE TABLE filter{filterIndex} AS (SELECT * FROM newPd)", True)
-                log.info(f"Table filter{filterIndex} created")
+                #log.info(f"Table filter{filterIndex} created")
             except Exception as e:
                 log.error(f"Error creating table: {e} trying to store file and load from there...")
                 newPd.to_csv(output_file, index=False)
@@ -262,15 +263,15 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
         limitClause = ""
         chunkIndex += 1
 
-    log.info("No more chunks")
+    #log.info("No more chunks")
     printStatus(manager, chunkIndex, totalChunks, 0, 0, totalRows, filter_, interactive, True)
-    log.info("Stopping consumers...")
+    log.debug("Stopping consumers...")
 
     consumersStopped = 0
     while manager.getActiveConsumers() > 0:
         manager.stop_consumer()
         consumersStopped += 1
-    log.info(f"Stopped {consumersStopped} consumers")
+    log.debug(f"Stopped {consumersStopped} consumers")
 
     cursor.close()
     return limitClause, table_name, totalRows
@@ -312,7 +313,7 @@ def mainProcess(input_file: str, config_file: str, output_file: str, interactive
         filter_['chunkSize'] = filter_.get('chunkSize', 10000)
         chunkSize = filter_['chunkSize']
 
-        log.info(f"Chunk size: {chunkSize} records")
+        log.debug(f"Chunk size: {chunkSize} records")
         totalChunks = (rowsLoaded // chunkSize) + 1
         totalRows = 0
 
@@ -321,7 +322,7 @@ def mainProcess(input_file: str, config_file: str, output_file: str, interactive
         cursor.execute("SELECT * FROM df" + limitClause)
         columns = [description[0] for description in cursor.description]
 
-        log.info(f"Processing filter {filterIndex} ({filter_.get('name', 'NoName')})...")
+        log.info(f"\n####################################################################################################\nProcessing filter {filterIndex} ({filter_.get('name', 'NoName')})\n####################################################################################################")
         filter_['index'] = filterIndex
 
         actionType = filter_.get('actionType')
@@ -363,9 +364,11 @@ def mainProcess(input_file: str, config_file: str, output_file: str, interactive
             if filter_.get('showSampleOnFinish', False):
                 log.info("Show example data from current data")
                 log.info("\n" + tabulate(df_sample, headers='keys', tablefmt='fancy_grid'))
-            else:
-                pd.option_context('display.max_columns', None)
-                log.info(df_sample)
+            #else:
+            #    pd.option_context('display.max_columns', None)
+            #    log.info(df_sample)
+                # Print with tabulate
+                #log.info("\n" + tabulate(df_sample, headers='keys', tablefmt='fancy_grid'))
         else:
             log.info("No data to show")
 
@@ -382,19 +385,21 @@ def main(
     input_file: str,
     config_file: str,
     output_file: str,
-    interactive: bool = typer.Option(False, "-i", "--interactive", help="Run in interactive mode"),
-    delete: bool = typer.Option(False, "-d", "--delete", help="Delete previous process data"),
-    verbose: bool = typer.Option(False, "-v", "--verbose", help="Verbose mode")
+    interactive: bool = False,
+    delete: bool = False,
+    verbose: bool = False
 ):
     logLevel = log.INFO
     if verbose:
         logLevel = log.DEBUG
     format_str = "%(asctime)s %(filename)s:%(lineno)d - %(message)s "
+    #handler = log.StreamHandler()
     log.basicConfig(
         format=format_str,
         level=logLevel,
         datefmt="%H:%M:%S",
-        handlers=[RichHandler()]
+        handlers=[RichHandler(rich_tracebacks=False, show_path=False, markup=False)]
+        #handlers=[handler]
     )
 
     log.info(f"Input file: {input_file}")
@@ -405,5 +410,36 @@ def main(
 
     mainProcess(input_file, config_file, output_file, interactive, delete)
 
+def cli(
+    input_file: str = typer.Argument(...),
+    config_file: str = typer.Argument(...),
+    output_file: str = typer.Argument(...),
+    interactive: bool = typer.Option(False, "-i", "--interactive", help="Run in interactive mode"),
+    delete: bool = typer.Option(False, "-d", "--delete", help="Delete previous process data"),
+    verbose: bool = typer.Option(False, "-v", "--verbose", help="Verbose mode")
+):
+    main(input_file, config_file, output_file, interactive, delete, verbose)
+
 if __name__ == "__main__":
-    typer.run(main)
+    if "--typer" in sys.argv:
+        # Quitar la bandera --typer y dejar que Typer procese el resto
+        sys.argv.remove("--typer")
+        typer.run(cli)
+    else:
+        # Modo manual: esperar exactamente 6 argumentos posicionales
+        # Ejemplo: python script.py input.json config.yaml output.json True False True
+        if len(sys.argv) != 4:
+            print("Usage:")
+            print("  python script.py <input_file> <config_file> <output_file> <interactive> <delete> <verbose>")
+            print("Or use:")
+            print("  python script.py --typer --help")
+            sys.exit(1)
+
+        input_file = sys.argv[1]
+        config_file = sys.argv[2]
+        output_file = sys.argv[3]
+        interactive = True
+        delete = True
+        verbose = False
+
+        main(input_file, config_file, output_file, interactive, delete, verbose)

@@ -13,6 +13,9 @@ def __init__(self):
     format = "%(asctime)s %(filename)s:%(lineno)d - %(message)s "
     log.basicConfig(format=format, level=log.INFO, datefmt="%H:%M:%S")
 
+def flatten_keys(d):
+    return {k.replace('.', '_'): v for k, v in d.items()}
+
 ############################################################################
 def restFilter(row_dict, actionConfig):
     host = actionConfig['host']
@@ -22,9 +25,12 @@ def restFilter(row_dict, actionConfig):
     queryParams = actionConfig.get('queryParams', "")
 
     try:
-        queryParams = queryParams.format(**row_dict)
+        #log.info("Row dict: " + str(row_dict))
+        flat_dict = flatten_keys(row_dict)
+        #log.info("Flat dict: " + str(flat_dict))
+        queryParams = queryParams.format(**flat_dict)
     except Exception as e:
-        log.debug(f"\t\tError mapping parameter: {e}")
+        log.error(f"\t\tError mapping parameter: {e}")
         return None
 
     # If not all parameters are filled, skip this row
@@ -64,13 +70,14 @@ def restFilter(row_dict, actionConfig):
         headers = {'Content-Type': 'application/json'}
         if actionConfig.get('logHttpRequests', False):
             log.info("\t\t" + method + " Request: " + url + "?" + queryParams + " Body: " + postBody)
-            try:
-                response = requests.request(method, url, data=postBody, headers=headers)
-            except Exception as e:
-                log.error(f"\t\tError making REST request: {e}")
-                return None
+        try:
+            response = requests.request(method, url, data=postBody, headers=headers)
+        except Exception as e:
+            log.error(f"\t\tError making REST request: {e}")
+            return None
 
     if response.status_code == 200:
+        log.info("HTTP request successful: " + str(response.status_code))
         if actionConfig.get('logHttpResponses', False):
             log.info("\t\tResponse:" + str(json.dumps(response.json())))
         # Add full json as new columns to the row

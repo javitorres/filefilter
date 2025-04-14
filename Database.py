@@ -40,7 +40,7 @@ class Database:
     def getQueryResult(self, query, logQuery=True):
         try:
             if logQuery:
-                log.info(f"Executing query: {query}")
+                log.debug(f"Executing query: {query}")
 
             # Ejecutar la consulta y obtener el DataFrame
             result = self.connection.execute(query).fetchdf()
@@ -53,7 +53,7 @@ class Database:
     def executeQuery(self, query, logQuery=True):
         try:
             if logQuery:
-                log.info(f"Executing query: {query}")
+                log.debug(f"Executing query: {query}")
 
             self.connection.execute(query)
         except Exception as e:
@@ -81,7 +81,7 @@ class Database:
             else:
                 raise Exception("File format not supported")
 
-            log.info(f"Executing query: {createTableQuery}")
+            log.debug(f"Executing query: {createTableQuery}")
             self.connection.execute(createTableQuery)
 
             # Opcional: Mostrar tablas cargadas
@@ -98,14 +98,14 @@ class Database:
     ####################################################
     def register(self, name, df):
         try:
-            log.info(f"Registering DataFrame as table '{name}'")
+            #log.info(f"Registering DataFrame as table '{name}'")
             df = df.astype({col: "float64" for col in df.select_dtypes(include=["float"]).columns})
             df = df.astype({col: "string" for col in df.select_dtypes(include=["object"]).columns})
 
             self.connection.register(name, df)
             # Verificación inmediata
-            test_query = self.connection.execute(f"SELECT * FROM {name} LIMIT 1").fetchdf()
-            log.info(f"Registration of '{name}' successful. Sample data:\n{test_query}")
+            test_query = self.connection.execute(f"SELECT * FROM {name} LIMIT 2").fetchdf()
+            log.info(f"Registration of '{name}' successful. Sample data (2 rows):\n{test_query}")
         except Exception as e:
             log.error(f"Error registering DataFrame '{name}': {e}")
             raise e
@@ -116,7 +116,7 @@ class Database:
             query = f"SELECT * FROM information_schema.tables WHERE table_name = '{name}'"
             result = self.connection.execute(query).fetchdf()
             exists = not result.empty
-            log.info(f"Table '{name}' exists: {exists}")
+            #log.info(f"Table '{name}' exists: {exists}")
             return exists
         except Exception as e:
             log.error(f"Error checking if table '{name}' exists: {e}")

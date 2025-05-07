@@ -26,7 +26,10 @@ class StatsManager:
 
     def get_eta(self, pending_rows, workers):
         avg = self.avg_time()
-        milliseconds = avg * pending_rows / workers
+        if workers > 0:
+            milliseconds = avg * pending_rows / workers
+        else:
+            milliseconds = avg * pending_rows
         #if (pending_rows % 10000 == 0):
             #print("MillisecondsETA: ", int(milliseconds), " HH:MM:SS:", time.strftime('%H:%M:%S', time.gmtime(milliseconds)), " Queue:", str(self.times))
         #print("MillisecondsETA: ", int(milliseconds), " HH:MM:SS:", time.strftime('%H:%M:%S', time.gmtime(milliseconds)), " Queue:", str(self.times))

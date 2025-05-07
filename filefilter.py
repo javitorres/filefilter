@@ -1,3 +1,7 @@
+############################################################################
+# FileFilter: A tool for filtering and transforming data files using Python, SQL, and REST APIs.
+############################################################################
+
 import gc
 import typer
 from tabulate import tabulate
@@ -24,6 +28,8 @@ statsManager = statsManager.StatsManager()
 lastStatusPrint = 0
 KILL = object()
 tracemalloc.start()
+global manager
+manager = None
 
 def applyDfFilter(df, filter_):
     """Apply a DataFrame-level filter (e.g. pandas transformation)."""
@@ -85,17 +91,23 @@ def applyRowFilter(rowIndex, row_dict, filter_):
         log.debug(f"Action type unknown: {actionType}")
         return {'row': row_dict}
 
-def consumer(idConsumer, jobQueue, outPutQueue):
+def consumerFunction(idConsumer, jobQueue, outPutQueue):
     global statsManager
     while True:
+        # Wait for a job to be available. ATTENTION: BLOCKING!
         job = jobQueue.get()
+        log.debug(f"Consumer_{idConsumer} received job {job['rowIndex']}")
         if job is KILL:
+            log.debug(f"Consumer_{idConsumer} received KILL signal")
             break  # Stop this consumer thread
 
         if job is None:
-            log.info(f"Consumer {idConsumer} got None job, skipping...")
+            log.info(f"Consumer_{idConsumer} got None job, skipping...")
             time.sleep(1)
             continue
+
+        global manager
+        manager.jobs_in_progress += 1
 
         row_dict = dict(zip(job['columns'], job['row']))
         start_time = int(round(time.time() * 1000))
@@ -112,9 +124,14 @@ def consumer(idConsumer, jobQueue, outPutQueue):
             log.error(f"\t\tNew row is None, skipping row {job['rowIndex']}. Row:\n{row_dict}")
         else:
             outPutQueue.put(result.get('row'))
-    log.debug(f"Stopped consumer {idConsumer}...")
+            log.debug(f"Consumer_{idConsumer} finished job {job['rowIndex']}!" + " " + str(result.get('row')))
+        log.debug(f"Manager jobs in progress: {manager.jobs_in_progress}")
+        manager.jobs_in_progress -= 1
+        log.debug(f"Manager jobs in progress now: {manager.jobs_in_progress}")
+        log.debug(f"Consumer_{idConsumer} finished job {job['rowIndex']}")
+    log.debug(f"Stopped Consumer_{idConsumer}...")
 
-def printStatus(manager, chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRows, filter_, interactive=False, force=False):
+def printStatus(chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRows, filter_, interactive=False, force=False):
     global statsManager
     global lastStatusPrint
 
@@ -155,8 +172,11 @@ def setNewThreads(config, newConfig):
     return changed
 
 def processChunk(chunkIndex, columns, config, config_file, filterThreads, filter_, interactive, lastConfigLoaded,
-                 manager, rowChunk, rowIndex, rowsInChunk, totalChunks, totalRows):
+                 rowChunk, rowIndex, rowsInChunk, totalChunks, totalRows):
     """Process a single chunk of rows for a line-based filter."""
+    global manager
+    log.debug(f"Entrando a processChunk con {len(rowChunk)} filas")
+
     for row in rowChunk:
         # Reload config if needed
         if config.get('reloadConfigEverySeconds', 0) != 0 and (
@@ -172,7 +192,8 @@ def processChunk(chunkIndex, columns, config, config_file, filterThreads, filter
 
         # Adjust consumers if needed
         if manager.getActiveConsumers() < filterThreads:
-            manager.start_consumer(consumer)
+            manager.start_consumer(consumerFunction)
+            log.debug(f"Launched consumer: {manager.getActiveConsumers()} activos")
             time.sleep(0.10)
         elif manager.getActiveConsumers() > filterThreads:
             manager.stop_consumer()
@@ -182,11 +203,12 @@ def processChunk(chunkIndex, columns, config, config_file, filterThreads, filter
             time.sleep(0.5)
 
         job = {'columns': columns, 'row': row, 'rowIndex': rowIndex, 'filter': filter_}
+        log.debug(f"Adding job {rowIndex} to queue")
         manager.putJob(job)
 
         rowIndex += 1
         totalRows += 1
-        printStatus(manager, chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRows, filter_, interactive, False)
+        printStatus(chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRows, filter_, interactive, False)
 
     # Free memory after processing chunk
     del rowChunk
@@ -198,6 +220,7 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
     """Process a line-based filter (python/rest) that requires iteration over each row."""
     filterThreads = filter_.get('filterThreads', 1)
     log.debug("Max threads: " + str(filterThreads))
+    global manager
     manager = ConsumerManager(queue.Queue(), filterThreads)
 
     rows_pending = True
@@ -212,19 +235,21 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
         log.debug(f"Loaded chunk {chunkIndex} with {rowsInChunk} records. {getMemoryUsage()}")
 
         rowIndex = 0
+        log.debug(f"Llamando a processChunk con {rowsInChunk} registros")
+
         rowIndex, totalRows = processChunk(
             chunkIndex, columns, config, config_file, filterThreads, filter_,
-            interactive, lastConfigLoaded, manager, rowChunk, rowIndex,
+            interactive, lastConfigLoaded, rowChunk, rowIndex,
             rowsInChunk, totalChunks, totalRows
         )
 
         # Wait for consumers to finish processing
-        while manager.getQueueSize() > 0:
-            time.sleep(0.5)
-            log.debug(f"Waiting for consumers to finish chunk queue ({manager.getQueueSize()})...")
+        log.debug("Waiting for all consumers to finish...")
+        manager.wait_until_all_consumers_idle()
+        log.debug("All consumers finished.")
 
         # Force status print at the end of the chunk
-        printStatus(manager, chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRows, filter_, interactive, True)
+        printStatus(chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRows, filter_, interactive, True)
 
         mem_db = db.getQueryResult("PRAGMA database_size", False)
         mem_db_dict = mem_db.to_dict()
@@ -264,11 +289,12 @@ def line_filter(chunkIndex, chunkSize, columns, config, config_file, cursor, db,
         chunkIndex += 1
 
     #log.info("No more chunks")
-    printStatus(manager, chunkIndex, totalChunks, 0, 0, totalRows, filter_, interactive, True)
+    printStatus(chunkIndex, totalChunks, 0, 0, totalRows, filter_, interactive, True)
     log.debug("Stopping consumers...")
 
     consumersStopped = 0
     while manager.getActiveConsumers() > 0:
+        log.debug(f"Stopping consumer {consumersStopped + 1} of {manager.getActiveConsumers()}")
         manager.stop_consumer()
         consumersStopped += 1
     log.debug(f"Stopped {consumersStopped} consumers")
@@ -407,6 +433,7 @@ def main(
     log.info(f"Output file: {output_file}")
     log.info(f"Interactive mode: {interactive}")
     log.info(f"Delete previous data: {delete}")
+    log.info(f"Verbose mode: {verbose}")
 
     mainProcess(input_file, config_file, output_file, interactive, delete)
 
@@ -422,24 +449,21 @@ def cli(
 
 if __name__ == "__main__":
     if "--typer" in sys.argv:
-        # Quitar la bandera --typer y dejar que Typer procese el resto
         sys.argv.remove("--typer")
-        typer.run(cli)
+        typer.run(run)
     else:
-        # Modo manual: esperar exactamente 6 argumentos posicionales
-        # Ejemplo: python script.py input.json config.yaml output.json True False True
-        if len(sys.argv) != 4:
+        if len(sys.argv) < 4:
             print("Usage:")
-            print("  python script.py <input_file> <config_file> <output_file> <interactive> <delete> <verbose>")
+            print("  python filefilter.py <input_file> <config_file> <output_file> [interactive] [delete] [verbose]")
             print("Or use:")
-            print("  python script.py --typer --help")
+            print("  python filefilter.py --typer --help")
             sys.exit(1)
 
         input_file = sys.argv[1]
         config_file = sys.argv[2]
         output_file = sys.argv[3]
-        interactive = True
-        delete = True
-        verbose = False
+        interactive = sys.argv[4].lower() == "true" if len(sys.argv) > 4 else True
+        delete = sys.argv[5].lower() == "true" if len(sys.argv) > 5 else True
+        verbose = sys.argv[6].lower() == "true" if len(sys.argv) > 6 else False
 
         main(input_file, config_file, output_file, interactive, delete, verbose)

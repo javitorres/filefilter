@@ -1,3 +1,7 @@
+###################################################################
+# Logger.py
+# #######################################################################
+
 import logging as log
 
 class Logger:
@@ -8,7 +12,7 @@ class Logger:
         "ERROR": 4
     }
 
-    def __init__(self, log_level="INFO"):
+    def __init__(self, log_level="DEBUG"):
         format = "%(asctime)s %(filename)s:%(lineno)d - %(message)s "
         log.basicConfig(format=format, level=log.INFO, datefmt="%H:%M:%S")
         self.log_level = log_level

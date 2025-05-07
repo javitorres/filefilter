@@ -1,8 +1,12 @@
-import random
+######################################################################
+#####################  ConsumerManager.py  ########################
+#######################################################################
+
 import concurrent.futures
 import threading
 import queue
 import logging as log
+import time
 
 KILL = object()
 MAX_WORKERS = 500
@@ -20,6 +24,8 @@ class ConsumerManager:
         self.active_consumers = 0
         self.lock = threading.Lock()
         self.lastConsumerId = 0
+        #self.consumers = []
+        self.jobs_in_progress = 0
 
     def start_consumer(self, consumer_func):
         with self.lock:
@@ -34,7 +40,7 @@ class ConsumerManager:
     def stop_consumer(self):
         with self.lock:
             if self.active_consumers > 0:
-                log.debug(f"Stopping consumer")
+                log.debug(f"Stopping consumer ")
                 self.jobQueue.put(KILL)
                 self.active_consumers -= 1
     
@@ -62,6 +68,19 @@ class ConsumerManager:
 
     def getMaxWorkers(self):
         return self.executor._max_workers
+
+    def wait_until_all_consumers_idle(self):
+        while not self.jobQueue.empty() or self.getActiveConsumers() > 0:
+            log.debug(f"Waiting for consumers to finish. Active consumers: {self.getActiveConsumers()}. Queue size: {self.getQueueSize()}")
+            if self.getActiveConsumers() > 0:
+                # Send message to stop consumers as soon as they finish
+                if self.getQueueSize() == 0:
+                    log.debug(f"Forcing stop of consumers. Active consumers: {self.getActiveConsumers()}. Queue size: {self.getQueueSize()}")
+                    self.stop_consumer()
+
+            # Wait for a short time before checking again
+            time.sleep(0.2)
+        log.debug(f"All consumers finished. Active consumers: {self.getActiveConsumers()}. Queue size: {self.getQueueSize()}")
 
 
 

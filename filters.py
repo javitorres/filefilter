@@ -68,7 +68,7 @@ def restFilter(row_dict, actionConfig):
         try:
             response = requests.request(method, url, params=queryParams)
         except Exception as e:
-            log.error(f"\t\tError making REST request: {e}")
+            log.error(f"\t\tError making REST request: {url}?{queryParams} :{e}")
             return None
     else:
         headers = {'Content-Type': 'application/json'}
@@ -81,7 +81,7 @@ def restFilter(row_dict, actionConfig):
             return None
 
     if response.status_code == 200:
-        log.info("HTTP request successful: " + str(response.status_code))
+        log.debug("HTTP request successful: " + str(response.status_code))
         if actionConfig.get('logHttpResponses', False):
             log.info("\t\tResponse:" + str(json.dumps(response.json())))
         # Add full json as new columns to the row
@@ -103,13 +103,18 @@ def restFilter(row_dict, actionConfig):
 ############################################################################
 def pythonFilter(filterIndex, row, code):
     #print("Code: ", code)
-    codeObject = CompiledCodeCache().get_compiled_code(filterIndex, code)
+    try:
+        codeObject = CompiledCodeCache().get_compiled_code(filterIndex, code)
+    except Exception as e:
+        log.error(f"\t\tError compiling python code: {e}")
+        raise e
 
     try:
         exec(codeObject, {"row": row})
         return row
     except Exception as e:
         log.error(f"\t\tError running python code: {e}")
+        raise e
 
 ############################################################################
 def sqlFilter(filter_):

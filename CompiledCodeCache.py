@@ -28,16 +28,5 @@ class CompiledCodeCache:
                 return code_object
             except Exception as e:
                 log.error(f"\t\tError compiling python code: {e}")
-                return None
-
-
-
-
-# Uso de la clase
-'''
-cache = CompiledCodeCache()
-cache.add_compiled_code("test1", "a = 5\nb=10\nprint('Sum:', a+b)")
-compiled_code = cache.get_compiled_code("test1")
-if compiled_code:
-    exec(compiled_code)
-'''
+                log.error("Please check your python code, exiting...")
+                raise e

@@ -9,6 +9,9 @@ import pandas as pd
 from tabulate import tabulate
 
 
+def truncate_df_values(df, max_len=10):
+    return df.applymap(lambda x: str(x)[:max_len] if pd.notnull(x) else "")
+
 class Database:
     def __init__(self, databaseName, deleteDatabase=False):
         format = "%(asctime)s %(filename)s:%(lineno)d - %(message)s "
@@ -99,6 +102,9 @@ class Database:
     def getCursor(self):
         return self.connection.cursor()
 
+
+
+
     ####################################################
     def register(self, name, df):
         try:
@@ -107,9 +113,15 @@ class Database:
             df = df.astype({col: "string" for col in df.select_dtypes(include=["object"]).columns})
 
             self.connection.register(name, df)
+            log.info("DF:" + str(type(df)))
             # Verificación inmediata
-            test_query = self.connection.execute(f"SELECT * FROM {name} LIMIT 2").fetchdf()
-            log.info(f"Registration of '{name}' successful. Sample data (2 rows):\n{test_query}")
+            test_query = self.connection.execute(f"SELECT * FROM {name} LIMIT 5").fetchdf()
+            trunc_df = truncate_df_values(test_query)
+            # Transponer, poner nombre a la columna izquierda
+            transposed = trunc_df.T
+            transposed.index.name = "Field name"
+
+            log.info("Filter finished, sample data: \n" + tabulate(transposed.reset_index(), headers='keys', tablefmt='fancy_grid', showindex=False, floatfmt=".0f"))
         except Exception as e:
             log.error(f"Error registering DataFrame '{name}': {e}")
             raise e

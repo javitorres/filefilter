@@ -5,12 +5,15 @@
 import duckdb
 import os
 import logging as log
-import pandas as pd
 from tabulate import tabulate
+import pandas as pd
 
 
 def truncate_df_values(df, max_len=10):
-    return df.applymap(lambda x: str(x)[:max_len] if pd.notnull(x) else "")
+    #return df.applymap(lambda x: str(x)[:max_len] if pd.notnull(x) else "")
+    #return df.astype(str).applymap(lambda x: x[:max_len])
+    return df.apply(lambda col: col.map(lambda x: str(x)[:max_len] if pd.notnull(x) else ""))
+
 
 class Database:
     def __init__(self, databaseName, deleteDatabase=False):
@@ -113,7 +116,7 @@ class Database:
             df = df.astype({col: "string" for col in df.select_dtypes(include=["object"]).columns})
 
             self.connection.register(name, df)
-            log.info("DF:" + str(type(df)))
+            #log.info("DF:" + str(type(df)))
             # Verificación inmediata
             test_query = self.connection.execute(f"SELECT * FROM {name} LIMIT 5").fetchdf()
             trunc_df = truncate_df_values(test_query)

@@ -25,7 +25,7 @@ class ConsumerManager:
 
         # Define stats dictionary to store consumer stats. For example OK: 4, ERROR: 2
         self.consumer_stats = {
-            "KILLED": 0,
+            "NORMAL": 0,
             "EXCEPTION": 0,
         }
 
@@ -51,7 +51,7 @@ class ConsumerManager:
         log.debug(f"Received finish signal from consumer {consumerId} with result: {result}")
         ## Store the result in the consumer stats dictionary
         if result == "KILLED":
-            self.consumer_stats["KILLED"] += 1
+            self.consumer_stats["NORMAL"] += 1
         elif result == "EXCEPTION":
             self.consumer_stats["EXCEPTION"] += 1
         else:
@@ -104,8 +104,8 @@ class ConsumerManager:
     def wait_until_all_consumers_idle(self, MAX_EXCEPTION=-1):
         log.debug(f"Waiting for consumers to finish. Active consumers: {self.getActiveConsumers()}. Queue size: {self.getQueueSize()}")
         while not self.jobQueue.empty() or self.getActiveConsumers() > 0:
-            log.debug(f"Stats: {self.consumer_stats}")
-            log.debug(f"Queue content: {[item for item in self.jobQueue.queue]}")
+            #log.debug(f"Stats: {self.consumer_stats}")
+            #log.debug(f"Queue content: {[item for item in self.jobQueue.queue]}")
             # If EXCEPTION stat is greater than MIN_ERRORS (except it is -1) exit
             if MAX_EXCEPTION != -1 and self.consumer_stats["EXCEPTION"] > MAX_EXCEPTION:
                 raise Exception(f"Max exceptions reached. Exiting. Active consumers: {self.getActiveConsumers()}. Queue size: {self.getQueueSize()}")

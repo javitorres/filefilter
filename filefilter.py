@@ -105,7 +105,7 @@ def consumerFunction(idConsumer, jobQueue, outPutQueue):
         statsManager.register(end_time - start_time)
 
         if result.get('row') is None:
-            log.error(f"\t\tNew row is None, skipping row {job['rowIndex']}. Row:\n{row_dict}")
+            log.error(f"\t\tNew row is None, skipping row {job['rowIndex']}")
         else:
             outPutQueue.put(result.get('row'))
             log.debug(f"Consumer_{idConsumer} finished job {job['rowIndex']}!")
@@ -117,7 +117,7 @@ def printStatus(text, chunkIndex, totalChunks, rowIndex, rowsInChunk, totalRows,
 
     message = (
         f"{text} "
-        f"Filter {filter_['index']} ({filter_['name']}): "
+        f"Filter {filter_['filterIndex']} ({filter_['name']}): "
         f"Total rows:{totalRows} Chunk:{chunkIndex}/{totalChunks} Row:{rowIndex}/{rowsInChunk} "
         f"Queue:{manager.getQueueSize()} Workers:{manager.getActiveConsumers()} "
         f"Worker stats: {manager.consumer_stats} "
@@ -337,7 +337,7 @@ def mainProcess(input_file: str, config_file: str, output_file: str, interactive
         columns = [description[0] for description in cursor.description]
 
         log.info(f"\n####################################################################################################\nProcessing filter {filterIndex} ({filter_.get('name', 'NoName')})\n####################################################################################################")
-        filter_['index'] = filterIndex
+        filter_['filterIndex'] = filterIndex
 
         actionType = filter_.get('actionType')
 
@@ -400,20 +400,25 @@ def main(
     config_file: str,
     output_file: str,
     interactive: bool = False,
-    delete: bool = False,
-    verbose: bool = False
+    delete: bool = True,
+    verbose: bool = False,
+    use_rich: bool = False
 ):
     logLevel = log.INFO
     if verbose:
         logLevel = log.DEBUG
     format_str = "%(asctime)s %(filename)s - :%(lineno)d (%(funcName)s) - %(message)s "
-    #handler = log.StreamHandler()
+
+    if use_rich:
+        handlers = [RichHandler(rich_tracebacks=False, show_path=False, markup=False)]
+    else:
+        handlers = [log.StreamHandler(sys.stdout)]
+
     log.basicConfig(
         format=format_str,
         level=logLevel,
         datefmt="%H:%M:%S",
-        handlers=[RichHandler(rich_tracebacks=False, show_path=False, markup=False)]
-        #handlers=[handler]
+        handlers=handlers
     )
 
     log.info(f"Input file: {input_file}")
@@ -422,6 +427,7 @@ def main(
     log.info(f"Interactive mode: {interactive}")
     log.info(f"Delete previous data: {delete}")
     log.info(f"Verbose mode: {verbose}")
+    log.info(f"Rich mode: {use_rich}")
 
     mainProcess(input_file, config_file, output_file, interactive, delete)
 #######################################################################
@@ -430,10 +436,11 @@ def run(
     config_file: str = typer.Argument(...),
     output_file: str = typer.Argument(...),
     interactive: bool = typer.Option(False, "-i", "--interactive", help="Run in interactive mode"),
-    delete: bool = typer.Option(False, "-d", "--delete", help="Delete previous process data"),
-    verbose: bool = typer.Option(False, "-v", "--verbose", help="Verbose mode")
+    delete: bool = typer.Option(True, "-d", "--delete", help="Delete previous process data"),
+    verbose: bool = typer.Option(False, "-v", "--verbose", help="Verbose mode"),
+    use_rich: bool = typer.Option(True, "--rich", help="Use Rich logging to see colors and progress bars", is_eager=True),
 ):
-    main(input_file, config_file, output_file, interactive, delete, verbose)
+    main(input_file, config_file, output_file, interactive, delete, verbose, use_rich)
 
 if __name__ == "__main__":
     typer.run(run)

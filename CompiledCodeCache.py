@@ -16,12 +16,12 @@ class CompiledCodeCache:
         return cls._instance
 
     def get_compiled_code(self, id, code):
-
+        #log.debug(f"Getting compiled code for filter id: {id}")
         compiled_code = self._cache.get(id, None)
         if compiled_code:
             return compiled_code
         else:
-            #log.debug("Code NOT found in cache")
+            #log.debug(f"Compiling code for filter id: {id}")
             try:
                 code_object = compile(code, 'sumstring', 'exec')
                 self._cache[id] = code_object

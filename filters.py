@@ -3,13 +3,14 @@
 ############################################################################
 
 import requests
-from Logger import Logger
 import duckdb
 import json
 import yaml
 from urllib.parse import quote
 from CompiledCodeCache import CompiledCodeCache
 import logging as log
+import io
+import sys
 
 #log = Logger("DEBUG")
 
@@ -110,7 +111,13 @@ def pythonFilter(filterIndex, row, code):
         raise e
 
     try:
+        buffer = io.StringIO()
+        sys_stdout_backup = sys.stdout
+        sys.stdout = buffer
         exec(codeObject, {"row": row})
+        sys.stdout = sys_stdout_backup
+        captured_output = buffer.getvalue()
+        log.info(f"\t\tCaptured output: {captured_output}")
         return row
     except Exception as e:
         log.error(f"\t\tError running python code: {e}")
@@ -119,7 +126,7 @@ def pythonFilter(filterIndex, row, code):
 ############################################################################
 def sqlFilter(filter_):
     sql = filter_['code']
-    index = str(filter_['index'])
+    index = str(filter_['filterIndex'])
     duckdb.query("CREATE OR REPLACE TABLE filter" + index +" AS (" + sql + ")")
 
 

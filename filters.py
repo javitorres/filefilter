@@ -117,7 +117,8 @@ def pythonFilter(filterIndex, row, code):
         exec(codeObject, {"row": row})
         sys.stdout = sys_stdout_backup
         captured_output = buffer.getvalue()
-        log.info(f"\t\tCaptured output: {captured_output}")
+        if captured_output and len(captured_output) > 0:
+            log.info(f"\t\tCaptured output: {captured_output}")
         return row
     except Exception as e:
         log.error(f"\t\tError running python code: {e}")
